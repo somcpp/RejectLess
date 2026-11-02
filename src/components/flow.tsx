@@ -3,9 +3,10 @@
 import Link from "next/link";
 import clsx from "clsx";
 import type { ReactNode } from "react";
-import { ArrowLeft, Check, ChevronRight } from "lucide-react";
+import { ArrowLeft, Check, ChevronRight, House } from "lucide-react";
+import { GovBand } from "./gov";
 
-/** Full-height step layout: back + progress on top, one question in the middle, action at the bottom. */
+/** Full-height step layout: back + progress + home on top, one question in the middle, action at the bottom. */
 export function StepFrame({
   progress,
   onBack,
@@ -15,6 +16,7 @@ export function StepFrame({
   stepKey,
   dir = "fwd",
   label,
+  ministry,
 }: {
   progress: number;
   onBack?: () => void;
@@ -24,25 +26,30 @@ export function StepFrame({
   stepKey: string;
   dir?: "fwd" | "back";
   label?: string;
+  ministry?: { ministry: string; ministryHi: string };
 }) {
+  const backCls = "inline-flex h-10 items-center gap-1.5 rounded-full border border-line bg-surface pl-2.5 pr-3.5 text-[14px] font-medium text-ink-2 hover:border-line-strong";
   return (
     <div className="flex min-h-dvh flex-col">
-      <header className="mx-auto flex w-full max-w-xl items-center gap-3 px-5 pt-5">
+      <GovBand ministry={ministry} />
+      <header className="mx-auto flex w-full max-w-xl items-center gap-3 px-5 pt-4">
         {onBack ? (
-          <button onClick={onBack} className="-ml-2 rounded-full p-2 text-ink-2 hover:bg-black/[0.05]" aria-label="Back">
-            <ArrowLeft className="size-5" />
+          <button onClick={onBack} className={backCls} aria-label="Back">
+            <ArrowLeft className="size-5" /> Back
           </button>
         ) : backHref ? (
-          <Link href={backHref} className="-ml-2 rounded-full p-2 text-ink-2 hover:bg-black/[0.05]" aria-label="Back">
-            <ArrowLeft className="size-5" />
+          <Link href={backHref} className={backCls} aria-label="Back">
+            <ArrowLeft className="size-5" /> Back
           </Link>
         ) : (
-          <span className="size-9" />
+          <span className="h-10" />
         )}
         <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-line" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress * 100)} aria-label={label ?? "Progress"}>
           <div className="h-full rounded-full bg-accent transition-[width] duration-500 ease-out" style={{ width: `${Math.max(4, progress * 100)}%` }} />
         </div>
-        <span className="w-9" />
+        <Link href="/" className="inline-flex size-10 items-center justify-center rounded-full border border-line bg-surface text-ink-2 hover:border-line-strong" aria-label="Home" title="Home">
+          <House className="size-5" />
+        </Link>
       </header>
       <main key={stepKey} className={clsx("mx-auto w-full max-w-xl flex-1 px-5 pb-8 pt-8 sm:pt-14", dir === "fwd" ? "step-fwd" : "step-back")}>
         {children}
@@ -69,6 +76,7 @@ export function Question({ eyebrow, title, sub }: { eyebrow?: string; title: str
 export function Choice({
   label,
   hint,
+  meta,
   icon,
   selected,
   disabled,
@@ -77,6 +85,8 @@ export function Choice({
 }: {
   label: string;
   hint?: string;
+  /** Small third line, e.g. the office that handles the form. */
+  meta?: ReactNode;
   icon?: ReactNode;
   selected?: boolean;
   disabled?: boolean;
@@ -102,6 +112,7 @@ export function Choice({
       <span className="min-w-0 flex-1">
         <span className="block text-[16px] font-medium">{label}</span>
         {hint && <span className="mt-0.5 block text-[14px] text-ink-3">{hint}</span>}
+        {meta && <span className="mt-1.5 block text-[12px] text-ink-3">{meta}</span>}
       </span>
       {tag ? (
         <span className="shrink-0 rounded-full border border-line px-2 py-0.5 text-[12px] text-ink-3">{tag}</span>

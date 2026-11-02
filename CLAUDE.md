@@ -44,7 +44,8 @@ src/
     profile.ts       merges document fields + user's draft into one comparison profile
     checks.ts        CHECKS registry: rule.check → implementation producing Findings
     run.ts           staged runner (STAGES), sorting, reconcile() for resolution history
-  knowledge/         sources.ts, documents.ts (doc types, field labels), rules.ts, applications.ts
+  knowledge/         sources.ts, documents.ts (doc types, field labels), rules.ts, applications.ts,
+                     authorities.ts (ministry/department/portal/helpline per app; DOC_SOURCES = where to get each document)
   lib/
     ingest/          pdf.ts (pdf.js), ocr.ts (Tesseract eng+hin), raster.ts, pipeline.ts
     store/session.ts Zustand + IndexedDB persistence, 24 h sliding expiry, deleteSession()
@@ -55,6 +56,9 @@ src/
                      package.ts (→ searchable PDF or degraded JPEG), devHarness.ts (dev-only window.__rl)
   knowledge/onboarding.ts  roles, work types, states, goals (→ app + variant), stateNote(), recommendPf()
   lib/useRunCheck.ts       shared staged check runner + inputSignature() (detects changes since a run)
+  lib/triage.ts            groups findings into the 5 result groups shown to users (does not change engine statuses)
+  components/gov.tsx       GovBand (tricolour strip, text size), ReadAloud (speech), AuthorityCard
+  components/workspace/DigiLockerMock.tsx  simulated DigiLocker fetch — always labelled as a simulation
   app/               Next.js routes:
                      /            landing (one CTA: Get started)
                      /start       onboarding: role → work → state → goal (or "not sure" helper) → plan + consent

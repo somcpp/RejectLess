@@ -4,12 +4,14 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import clsx from "clsx";
 import type { ReactNode } from "react";
-import { ArrowLeft, FlaskConical, LayoutList, MessageCircleQuestion, ShieldCheck } from "lucide-react";
+import { ArrowLeft, FlaskConical, House, LayoutList, MessageCircleQuestion, ShieldCheck } from "lucide-react";
 import { Logo } from "@/components/site";
+import { GovBand } from "@/components/gov";
 import { btn, Spinner } from "@/components/ui";
 import { useActiveSession } from "@/lib/hooks";
 import { useUi } from "@/lib/store/ui";
 import { getGoal, goalForVariant, stateName } from "@/knowledge/onboarding";
+import { getAuthority } from "@/knowledge/authorities";
 import { ConsentGate } from "./ConsentGate";
 import { AssistantPanel } from "./AssistantPanel";
 import { DemoGuide } from "./DemoGuide";
@@ -40,6 +42,7 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
   if (!session || !app || !variant) {
     return (
       <div className="flex min-h-screen flex-col">
+        <GovBand />
         <header className="mx-auto flex h-16 w-full max-w-5xl items-center px-5">
           <Logo />
         </header>
@@ -58,12 +61,17 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
   const guided = pathname === "/workspace";
   const goal = getGoal(session.profile?.goal) ?? goalForVariant(session.appId, session.variantId);
   const where = session.profile?.state ? stateName(session.profile.state) : undefined;
+  const auth = getAuthority(session.appId);
 
   return (
     <div className="flex min-h-screen flex-col">
+      <GovBand ministry={auth} />
       <header className="sticky top-0 z-30 bg-bg/95 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-5xl items-center gap-3 px-5">
-          <Logo className="shrink-0 [&>span]:hidden sm:[&>span]:inline" />
+          <Link href="/" className="rounded-lg p-2 text-ink-2 hover:bg-black/[0.05]" title="Home" aria-label="Home">
+            <House className="size-5" />
+          </Link>
+          <Logo className="hidden shrink-0 sm:inline-flex" />
           <div className="min-w-0 flex-1 border-l border-line pl-3">
             <p className="truncate text-[14px] font-medium leading-tight">{goal?.label ?? variant.name}</p>
             <p className="truncate text-[12px] text-ink-3">

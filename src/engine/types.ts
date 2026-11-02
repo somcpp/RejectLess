@@ -257,6 +257,8 @@ export interface Finding {
   /** Privacy-safe description used for AI assistance (no raw identifiers). */
   abstract: string;
   affectedDocIds: string[];
+  /** Set when the check could not run: the plain-language name of the missing input. */
+  missingInput?: string;
 }
 
 export type ResolutionState = "open" | "acknowledged" | "confirmed_correct" | "resolved";

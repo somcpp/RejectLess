@@ -6,7 +6,7 @@ import { processFile } from "@/lib/ingest/pipeline";
 import { reExtract } from "@/lib/ingest/pipeline";
 import { DOC_TYPES } from "@/knowledge/documents";
 import { getApplication } from "@/knowledge/applications";
-import type { Fix, Scenario } from "@/demo/scenarios";
+import type { DocSpec, Fix, Scenario } from "@/demo/scenarios";
 import { PERSONAS } from "@/demo/personas";
 import { goalForVariant, type UserProfile } from "@/knowledge/onboarding";
 import { useUi } from "@/lib/store/ui";
@@ -116,6 +116,41 @@ export async function loadScenario(s: Scenario) {
   } finally {
     useUi.setState({ demoLoading: false });
   }
+}
+
+/**
+ * Simulated DigiLocker fetch. RejectLess is not connected to DigiLocker; in a demo
+ * session this adds the persona's fictional specimen so the flow can be shown end to end.
+ * In a real session it returns "unavailable" so the UI can point to the real download.
+ */
+export async function mockDigiLockerFetch(docType: DocTypeId): Promise<"added" | "unavailable"> {
+  const store = useSession.getState();
+  const s = store.session;
+  if (!s?.demoScenarioId) return "unavailable";
+  const { getScenario } = await import("@/demo/scenarios");
+  const { getCustomScenario } = await import("@/demo/custom");
+  const scenario = s.demoScenarioId === "custom" ? getCustomScenario() : getScenario(s.demoScenarioId);
+  const persona = scenario ? PERSONAS[scenario.personaId] : undefined;
+  if (!persona) return "unavailable";
+  const b = await import("@/demo/scenarios");
+  const builders: Partial<Record<DocTypeId, () => DocSpec>> = {
+    aadhaar: () => b.aadhaarDoc(persona),
+    pan: () => (persona.pan ? b.panDoc(persona) : undefined)!,
+    bank_passbook: () => b.passbookDoc(persona),
+    cancelled_cheque: () => b.chequeDoc(persona),
+    epf_passbook: () => (persona.epf ? b.epfDoc(persona) : undefined)!,
+    marksheet_12: () => (persona.student ? b.marksheetDoc(persona) : undefined)!,
+    income_certificate: () => (persona.student ? b.incomeDoc(persona) : undefined)!,
+    bonafide_certificate: () => (persona.student ? b.bonafideDoc(persona) : undefined)!,
+  };
+  const spec = builders[docType]?.();
+  if (!spec) return "unavailable";
+  const { specToFile } = await import("@/demo/package");
+  const file = await specToFile(spec);
+  store.unskipDoc(docType);
+  store.log(`Simulated DigiLocker fetch: ${DOC_TYPES[docType].short} (fictional specimen)`);
+  await Promise.all(addFiles([file], { synthetic: true, hintType: docType }));
+  return "added";
 }
 
 export async function applyFix(fix: Fix) {

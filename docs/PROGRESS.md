@@ -15,7 +15,12 @@ _Last updated: 2026-11-02. Update this file when you finish or start something; 
 - **Quality**: 71 unit tests; all scenarios verified in browser.
 - **Guided UX (redesign)**: minimal landing page; onboarding at /start (who you are, work type, state, goal, "not sure" PF recommender, plan + consent); guided workspace (documents one at a time → confirm only unclear/differing values → details → check → plain-language results with one action per issue, evidence on demand, "Explain this"); floating Ask; detailed views kept under "All details". AI reasoning clicked through in the UI with Groq (grounded, cited).
 
+- **Clear results & help for first-time applicants (2026-11-02)**: results grouped into five tappable groups — Fix now, Documents needed, Check these, Confirm on portal, Passed (`lib/triage.ts`; engine statuses unchanged, "could not check" findings now carry `missingInput`). Passed shows which document and which details matched; Documents needed shows where to get each document (`knowledge/authorities.ts` → `DOC_SOURCES`) with a clearly-labelled **simulated DigiLocker** flow (adds a fictional specimen in demo sessions; otherwise explains the real download); Confirm-on-portal is a tickable checklist. Ministry/department, portal, helpline, fee and timeline per application (`AUTHORITIES`) shown on the goal and plan screens and in results. Government-portal visual cues (tricolour band, bilingual labels, A/A/A text size) without any emblem or claim to be official. Guided workspace now has Back, Home, numbered icon stages (tap a completed stage to return), and "Listen" (browser speech) on every step title.
+
 ## Known gaps
+
+- [ ] DigiLocker is simulated only; a real integration needs requester registration with MeitY.
+- [ ] Helplines/timelines in `AUTHORITIES` are from the portals/citizen charter as accessed on 2026-11-02 — re-verify before launch; 14470 is secondary-sourced.
 
 - [ ] No Playwright end-to-end tests yet.
 - [ ] Hindi questions to the AI untested; Hindi UI not built.

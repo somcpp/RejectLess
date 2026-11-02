@@ -113,15 +113,18 @@ function balance(ctx: CheckContext): { amount: number; v: ProfileValue } | null 
 
 /** Used when a check cannot run because an input is missing — never silently skipped. */
 function insufficient(rule: RuleDef, missing: string): Finding {
-  return finding(rule, {
-    status: "review",
-    severity: "medium",
-    title: `Could not check — ${rule.title}`,
-    summary: `This check needs your ${missing}, which was not found in your documents or application details. The result is unknown — not passed.`,
-    abstract: `Check not possible: ${missing} missing.`,
-    confidence: 0,
-    recommendation: `Add a document that shows your ${missing}, or enter it in your application details, then run the check again.`,
-  });
+  return {
+    ...finding(rule, {
+      status: "review",
+      severity: "medium",
+      title: `Could not check — ${rule.title}`,
+      summary: `This check needs your ${missing}, which was not found in your documents or application details. The result is unknown — not passed.`,
+      abstract: `Check not possible: ${missing} missing.`,
+      confidence: 0,
+      recommendation: `Add a document that shows your ${missing}, or enter it in your application details, then run the check again.`,
+    }),
+    missingInput: missing,
+  };
 }
 
 const OUTCOME_RANK = { consistent: 0, insufficient: 1, minor_variation: 2, mismatch: 3 } as const;

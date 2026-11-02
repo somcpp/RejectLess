@@ -3,9 +3,11 @@
 import { useRef, useState } from "react";
 import Link from "next/link";
 import clsx from "clsx";
-import { ArrowRight, Check, CircleAlert, FileUp, Lightbulb, Lock } from "lucide-react";
+import { ArrowRight, Check, CircleAlert, CloudDownload, ExternalLink, FileUp, Lightbulb, Lock } from "lucide-react";
 import type { DocTypeId } from "@/engine/types";
 import { Button, Spinner } from "@/components/ui";
+import { DigiLockerMock } from "@/components/workspace/DigiLockerMock";
+import { DOC_SOURCES } from "@/knowledge/authorities";
 import { ActionBar, StepTitle } from "./common";
 import { useActiveSession, useDocProgress } from "@/lib/hooks";
 import { addFiles } from "@/lib/actions";
@@ -23,6 +25,7 @@ export function DocumentsStep() {
   const input = useRef<HTMLInputElement>(null);
   const demoLoading = useUi((s) => s.demoLoading);
   const [dragging, setDragging] = useState(false);
+  const [dl, setDl] = useState<DocTypeId>();
   if (!session || !variant) return null;
 
   const skipped = session.skippedDocs ?? [];
@@ -118,6 +121,27 @@ export function DocumentsStep() {
             <Lightbulb className="mt-0.5 size-4 shrink-0 text-review" />
             {DOC_TYPES[current.docType].uploadTip}
           </p>
+          {DOC_SOURCES[current.docType] && (
+            <div className="mt-3 rounded-2xl border border-line bg-surface px-4 py-3 text-[14px]">
+              <p className="text-ink-2">
+                <span className="font-medium text-ink">Don&rsquo;t have it? </span>
+                {DOC_SOURCES[current.docType]!.where}
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {DOC_SOURCES[current.docType]!.digilocker !== "no" && (
+                  <Button size="sm" variant="secondary" onClick={() => setDl(current.docType)}>
+                    <CloudDownload className="size-4" /> Get from DigiLocker
+                  </Button>
+                )}
+                {DOC_SOURCES[current.docType]!.link && (
+                  <a href={DOC_SOURCES[current.docType]!.link!.url} target="_blank" rel="noreferrer" className="inline-flex h-8 items-center gap-1 px-2 text-[13px] font-medium text-accent hover:underline">
+                    {DOC_SOURCES[current.docType]!.link!.label} <ExternalLink className="size-3.5" />
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
+          {dl && <DigiLockerMock docType={dl} onClose={() => setDl(undefined)} />}
           {wrongSlot && (
             <p className="mt-3 rounded-xl bg-review-soft px-4 py-3 text-[14px] text-[#5f3a05]">
               That file looks like your {DOC_TYPES[wrongSlot.typeId].short}, so we added it as that.

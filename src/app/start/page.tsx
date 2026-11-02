@@ -3,9 +3,11 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Briefcase, DoorOpen, FileText, GraduationCap, HandHelping, Lightbulb, Lock, MapPin, Search, Sprout } from "lucide-react";
+import { ArrowRight, Briefcase, ChevronDown, DoorOpen, FileText, GraduationCap, HandHelping, Landmark, Lightbulb, Lock, MapPin, Search, Sprout } from "lucide-react";
 import { Choice, Question, StepFrame } from "@/components/flow";
+import { AuthorityCard, ReadAloud } from "@/components/gov";
 import { Button } from "@/components/ui";
+import { getAuthority } from "@/knowledge/authorities";
 import {
   ROLES, STATES, WORK_NOTES, WORK_TYPES, getGoal, goalsFor, recommendPf, stateName, stateNote,
   type PfAnswers, type Recommendation, type RoleId, type UserProfile, type WorkId,
@@ -43,6 +45,7 @@ export default function StartPage() {
   const [rec, setRec] = useState<Recommendation>();
   const [query, setQuery] = useState("");
   const [showConsent, setShowConsent] = useState(false);
+  const [about, setAbout] = useState<string>();
 
   function go(next: Step) {
     setHistory((h) => [...h, step]);
@@ -170,19 +173,47 @@ export default function StartPage() {
     return (
       <StepFrame stepKey={step} dir={dir} progress={PROGRESS.goal} onBack={back}>
         <Question title="What would you like to do?" sub={available.length ? "Pick one. You can come back for another later." : undefined} />
+        <ReadAloud className="-mt-4 mb-5" text={`What would you like to do? ${options.map((g) => `${g.label}. ${g.hint}.`).join(" ")}`} />
         <div className="space-y-3">
-          {options.map((g) => (
-            <Choice
-              key={g.id}
-              label={g.label}
-              hint={g.hint}
-              icon={<FileText className="size-5" />}
-              disabled={g.comingSoon}
-              tag={g.comingSoon ? "Coming soon" : undefined}
-              selected={goalId === g.id}
-              onClick={() => pick(() => setGoalId(g.id), "plan")}
-            />
-          ))}
+          {options.map((g) => {
+            const auth = getAuthority(g.appId);
+            const v = g.appId && g.variantId ? getVariant(g.appId, g.variantId) : undefined;
+            const open = about === g.id;
+            return (
+              <div key={g.id}>
+                <Choice
+                  label={g.label}
+                  hint={g.hint}
+                  meta={auth ? (
+                    <span className="inline-flex items-center gap-1">
+                      <Landmark className="size-3" /> {auth.department.replace(/\s*\(.*\)\s*$/, "")}
+                      {v ? ` · ${v.formName}` : ""}
+                    </span>
+                  ) : undefined}
+                  icon={<FileText className="size-5" />}
+                  disabled={g.comingSoon}
+                  tag={g.comingSoon ? "Coming soon" : undefined}
+                  selected={goalId === g.id}
+                  onClick={() => pick(() => setGoalId(g.id), "plan")}
+                />
+                {auth && (
+                  <button
+                    onClick={() => setAbout(open ? undefined : g.id)}
+                    aria-expanded={open}
+                    className="mt-1 inline-flex items-center gap-1 px-2 py-1 text-[13px] text-ink-3 hover:text-ink"
+                  >
+                    <ChevronDown className={`size-3.5 transition-transform ${open ? "rotate-180" : ""}`} />
+                    {open ? "Hide details" : "Who runs this and what happens"}
+                  </button>
+                )}
+                {open && auth && (
+                  <div className="rise mt-2">
+                    <AuthorityCard a={auth} compact formName={v?.formName} />
+                  </div>
+                )}
+              </div>
+            );
+          })}
           {pfRole && (
             <Choice
               label="I'm not sure"
@@ -302,12 +333,14 @@ export default function StartPage() {
   if (step === "plan" && goal && variant) {
     const docs = variant.documents;
     const workNote = work ? WORK_NOTES[work] : undefined;
+    const auth = getAuthority(goal.appId);
     return (
       <StepFrame
         stepKey={step}
         dir={dir}
         progress={PROGRESS.plan}
         onBack={back}
+        ministry={auth}
         footer={
           <div>
             <Button size="lg" className="w-full" onClick={begin}>
@@ -335,7 +368,12 @@ export default function StartPage() {
         }
       >
         <Question eyebrow="Here's your plan" title={goal.label} sub={`${variant.formName} · ${stateName(stateCode)}`} />
+        <ReadAloud
+          className="-mt-4 mb-5"
+          text={`Your plan: ${goal.label}. You will need: ${docs.map((d) => DOC_TYPES[d.docType].label).join(", ")}. ${auth ? `This is handled by ${auth.department}. ${auth.fee}` : ""} It takes about 5 minutes.`}
+        />
         <div className="space-y-6">
+          {auth && <AuthorityCard a={auth} formName={variant.formName} />}
           <section>
             <h2 className="text-[15px] font-semibold">You&rsquo;ll need</h2>
             <ul className="mt-3 space-y-2">
