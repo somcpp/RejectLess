@@ -11,6 +11,7 @@ Current status and roadmap: [docs/PROGRESS.md](docs/PROGRESS.md) — update it w
 ```bash
 npm install        # postinstall copies pdf.js worker + Devanagari font into /public
 npm run dev        # http://localhost:3000
+npm run dev:https  # https on your LAN IP — needed for the live camera scanner on a phone (getUserMedia requires a secure context)
 npm test           # Vitest engine tests — must stay green
 npx tsc --noEmit   # type-check
 npx eslint src

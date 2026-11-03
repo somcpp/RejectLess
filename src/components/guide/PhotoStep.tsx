@@ -6,6 +6,7 @@ import type { ApplicationVariant } from "@/engine/types";
 import { Button, Spinner } from "@/components/ui";
 import { useSession } from "@/lib/store/session";
 import { assessPhoto, blobToDataUrl, compressUnder, loadPhoto, renderCrop, type CropView } from "@/lib/photo";
+import { demoFlag } from "@/lib/demoOverrides";
 
 /** Take or choose a picture, crop it to the portal's photo size, compress it under the limit, download. */
 export function PhotoStep({ spec }: { spec: NonNullable<ApplicationVariant["photoSpec"]> }) {
@@ -48,7 +49,9 @@ export function PhotoStep({ spec }: { spec: NonNullable<ApplicationVariant["phot
     try {
       const c = renderCrop(src, spec.width, spec.height, view);
       const { blob } = await compressUnder(c, spec.maxKb);
-      const { issues } = assessPhoto(c);
+      let { issues } = assessPhoto(c);
+      // Dev-only rehearsal switch (.env NEXT_PUBLIC_DEMO_OVERRIDES {"photo.issues":"glare"}); labelled below.
+      if (demoFlag("photo.issues") === "glare") issues = ["The image has glare — a bright reflection on the face or glasses. Retake it facing the light, not under it."];
       setPhoto({ dataUrl: await blobToDataUrl(blob), bytes: blob.size, width: spec.width, height: spec.height, at: new Date().toISOString(), issues });
       setSrc(undefined);
     } finally {
@@ -70,6 +73,7 @@ export function PhotoStep({ spec }: { spec: NonNullable<ApplicationVariant["phot
                 <div>
                   {photo.issues.map((i) => <p key={i} className="font-semibold">{i}</p>)}
                   <p className="mt-1 text-[13px]">Portals reject photos with reflections or shadows on the face. You can still download this one, but a retake is safer.</p>
+                  {demoFlag("photo.issues") && <p className="mt-1 text-[11px] text-external">demo override active (.env)</p>}
                 </div>
               </div>
             ) : (

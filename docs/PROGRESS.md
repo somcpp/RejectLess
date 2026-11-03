@@ -60,6 +60,8 @@ _Last updated: 2026-11-03. Update this file when you finish or start something; 
 
 - **Photo assessment; no more "confidence is low" (2026-11-03)**: the pipeline no longer emits the `low_ocr_confidence` issue (the OCR average stays as a metric; readability is judged per field). The passport photo is assessed after cropping (`assessPhoto`: glare measured on the central face area, exposure, focus) and the ready card says "The image has glare — …" with retake advice, or "Looks clear".
 
+- **Scanner on phones + mobile Ask (2026-11-03)**: the live camera needs a secure context — over plain `http://<LAN-IP>:3000` `navigator.mediaDevices` is undefined even with permission. The scanner now explains that, tries three constraint sets (rear camera → any camera), reports NotAllowed/NotFound/NotReadable by name, and offers "Take a photo" (`<input capture="environment">`, which opens the phone camera app even over http). `npm run dev:https` (`next dev --experimental-https`) serves a local HTTPS URL for phone testing of the live scanner. The floating Ask button is now visible on phones (above the sticky action bar).
+
 ## Known gaps
 
 - [ ] Scanner tested on synthetic frames only; try on real phones (lighting, autofocus delays, rear-camera selection).

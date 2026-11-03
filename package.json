@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "postinstall": "node scripts/copy-assets.mjs",
-    "test": "vitest run"
+    "test": "vitest run",
+    "dev:https": "next dev --experimental-https"
   },
   "dependencies": {
     "@expo-google-fonts/noto-sans-devanagari": "^0.4.2",

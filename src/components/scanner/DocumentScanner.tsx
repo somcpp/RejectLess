@@ -28,22 +28,63 @@ export function DocumentScanner({ title, onCapture, onClose }: { title: string; 
   const steady = useRef<{ quad: Quad; n: number } | null>(null);
   const lastShot = useRef(0);
   const fileInput = useRef<HTMLInputElement>(null);
+  const cameraInput = useRef<HTMLInputElement>(null);
 
   // Camera on/off with the dialog.
   useEffect(() => {
     let stream: MediaStream | undefined;
+    let stopped = false;
     (async () => {
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
-        if (video.current) {
-          video.current.srcObject = stream;
-          await video.current.play();
+      // Browsers expose the camera only on https:// or localhost. Over plain http on a phone
+      // (e.g. http://192.168.1.5:3000) navigator.mediaDevices is undefined even with permission.
+      if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+        setError(`Live camera needs a secure address (https:// or localhost); this page is ${location.protocol}//${location.host}. Use “Take a photo” below — it opens your phone camera directly.`);
+        return;
+      }
+      const attempts: MediaStreamConstraints[] = [
+        { video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false },
+        { video: { facingMode: "environment" }, audio: false },
+        { video: true, audio: false },
+      ];
+      let lastErr: unknown;
+      for (const c of attempts) {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia(c);
+          break;
+        } catch (e) {
+          lastErr = e;
         }
-      } catch {
-        setError("Camera not available here. You can still choose a photo from your phone.");
+      }
+      if (!stream) {
+        const name = (lastErr as { name?: string })?.name ?? "";
+        setError(
+          name === "NotAllowedError"
+            ? "Camera permission was refused. Allow it in the browser's site settings, or use “Take a photo” below."
+            : name === "NotFoundError"
+              ? "No camera was found on this device. Use “Take a photo” / “Use a photo instead”."
+              : name === "NotReadableError"
+                ? "Another app is using the camera. Close it and try again, or use “Take a photo” below."
+                : `Camera could not start (${name || "unknown error"}). Use “Take a photo” below.`,
+        );
+        return;
+      }
+      if (stopped) {
+        stream.getTracks().forEach((t) => t.stop());
+        return;
+      }
+      if (video.current) {
+        video.current.srcObject = stream;
+        try {
+          await video.current.play();
+        } catch {
+          /* autoplay can be blocked until a tap; the muted video still starts on the first interaction */
+        }
       }
     })();
-    return () => stream?.getTracks().forEach((t) => t.stop());
+    return () => {
+      stopped = true;
+      stream?.getTracks().forEach((t) => t.stop());
+    };
   }, []);
 
   // Analyse a few frames a second (setInterval, not rAF — see CLAUDE.md).
@@ -131,8 +172,8 @@ export function DocumentScanner({ title, onCapture, onClose }: { title: string; 
           <canvas ref={overlay} className="pointer-events-none absolute inset-0 h-full w-full" />
           <canvas ref={work} className="hidden" />
           {flash && <div className="absolute inset-0 bg-white/80" />}
-          <div className={clsx("absolute inset-x-0 top-0 flex items-center justify-center gap-2 px-3 py-2 text-[14px] font-semibold text-white", g.ok ? "bg-pass/85" : "bg-ink/70")}>
-            {g.ok && auto ? <Spinner className="size-3.5" /> : null} {error ?? g.text}
+          <div className={clsx("absolute inset-x-0 top-0 flex items-center justify-center gap-2 px-3 py-2 text-center text-[14px] font-semibold text-white", error ? "bg-action/90" : g.ok ? "bg-pass/85" : "bg-ink/70")}>
+            {g.ok && auto && !error ? <Spinner className="size-3.5" /> : null} {error ?? g.text}
           </div>
           {report && (
             <p className="absolute bottom-2 left-3 text-[11px] text-white/80">
@@ -151,9 +192,14 @@ export function DocumentScanner({ title, onCapture, onClose }: { title: string; 
           <label className="inline-flex items-center gap-1.5 text-[13px]">
             <input type="checkbox" checked={enhance} onChange={(e) => setEnhance(e.target.checked)} className="size-4 accent-[var(--accent)]" /> <Wand2 className="size-3.5" /> Clean up (document mode)
           </label>
-          <button onClick={() => fileInput.current?.click()} className="ml-auto inline-flex items-center gap-1 text-[13px] font-semibold text-accent underline underline-offset-2">
+          <button onClick={() => cameraInput.current?.click()} className="ml-auto inline-flex items-center gap-1 text-[13px] font-semibold text-accent underline underline-offset-2">
+            <Camera className="size-3.5" /> Take a photo
+          </button>
+          <button onClick={() => fileInput.current?.click()} className="inline-flex items-center gap-1 text-[13px] font-semibold text-accent underline underline-offset-2">
             <FileUp className="size-3.5" /> Use a photo instead
           </button>
+          {/* capture="environment" opens the phone's camera app even over plain http. */}
+          <input ref={cameraInput} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => { if (e.target.files?.length) onCapture(Array.from(e.target.files)); e.target.value = ""; }} />
           <input ref={fileInput} type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => { if (e.target.files?.length) onCapture(Array.from(e.target.files)); e.target.value = ""; }} />
         </div>
 

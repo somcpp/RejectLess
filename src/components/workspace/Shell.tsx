@@ -141,7 +141,7 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
       {!assistantOpen && (
         <button
           onClick={() => openAssistant()}
-          className="fixed bottom-6 right-6 z-40 hidden h-12 items-center gap-2 rounded-sm bg-saffron px-5 text-[14px] font-bold text-white shadow-[0_8px_20px_rgba(0,0,0,0.25)] transition-transform hover:-translate-y-0.5 sm:inline-flex"
+          className="fixed bottom-24 right-4 z-40 inline-flex h-12 items-center gap-2 rounded-sm bg-saffron px-5 text-[14px] font-bold text-white shadow-[0_8px_20px_rgba(0,0,0,0.25)] transition-transform hover:-translate-y-0.5 sm:bottom-6 sm:right-6"
           aria-label="Ask a question"
         >
           <MessageCircleQuestion className="size-5" /> Ask
