@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>RejectLess — System Architecture (Mermaid)</title>
+<style>
+  body { margin: 0; padding: 32px; background: #fff; font-family: "Segoe UI", system-ui, sans-serif; }
+  h1 { margin: 0 0 18px; font-size: 22px; color: #1c2230; }
+  h1 span { color: #1f3d7a; }
+  #out svg { max-width: none !important; }
+</style>
+</head>
+<body>
+<h1>RejectLess — <span>System Architecture</span></h1>
+<div id="out"></div>
+<script type="module">
+  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+  mermaid.initialize({ startOnLoad: false, theme: "base", flowchart: { curve: "basis", nodeSpacing: 28, rankSpacing: 56, padding: 12 }, themeVariables: { fontFamily: "Segoe UI, system-ui, sans-serif", fontSize: "15px", lineColor: "#56607a" } });
+  const src = await fetch("architecture.mmd").then((r) => r.text()).catch(() => document.getElementById("src")?.textContent);
+  const { svg } = await mermaid.render("arch", src);
+  document.getElementById("out").innerHTML = svg;
+  const s = document.querySelector("#out svg").getBoundingClientRect();
+  document.title = `done w=${Math.ceil(s.width + 64)} h=${Math.ceil(s.bottom + 32)}`;
+</script>
+</body>
+</html>

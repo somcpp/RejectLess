@@ -1,0 +1,454 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>RejectLess — Production Technical Architecture</title>
+<meta name="viewport" content="width=1660" />
+<style>
+  :root {
+    --navy: #1f3d7a; --navy-2: #2c4f94; --saffron: #d9771f; --green: #1b7a46; --red: #c0392b;
+    --ink: #1c2230; --ink-2: #4a5263; --ink-3: #6f7787; --line: #d8dde6; --bg: #f3f5f8; --card: #ffffff;
+    --lane-device: #eef3fc; --lane-edge: #f4f1fb; --lane-svc: #eef8f2; --lane-ext: #fdf4ea; --lane-kb: #f6f7f9; --lane-plat: #f1f3f6;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 13px/1.45 "Segoe UI", "Inter", "Noto Sans", system-ui, sans-serif; }
+  .canvas { position: relative; width: 1604px; margin: 0 auto; padding: 28px 32px 40px; }
+  header.top { display: flex; align-items: flex-end; justify-content: space-between; border-bottom: 3px solid var(--navy); padding-bottom: 14px; }
+  header.top h1 { margin: 0; font-size: 28px; letter-spacing: -0.01em; }
+  header.top h1 span { color: var(--navy); }
+  header.top p { margin: 4px 0 0; color: var(--ink-2); font-size: 14px; }
+  .meta { text-align: right; color: var(--ink-3); font-size: 12px; }
+  .tricolour { height: 4px; background: linear-gradient(90deg, #ff9933 33.3%, #fff 33.3% 66.6%, #138808 66.6%); margin-bottom: 18px; }
+  .principles { display: flex; gap: 10px; margin: 16px 0 22px; }
+  .principles div { flex: 1; background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--navy); padding: 8px 12px; font-size: 12.5px; }
+  .principles b { display: block; font-size: 13px; color: var(--navy); }
+
+  .grid { display: grid; grid-template-columns: 1064px 140px 336px; grid-template-rows: auto auto auto; row-gap: 76px; }
+  .lane { position: relative; border: 1.5px solid var(--line); border-radius: 10px; padding: 14px 16px 16px; }
+  .lane > h2 { margin: 0 0 2px; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+  .lane > h2 .num { display: inline-flex; width: 22px; height: 22px; border-radius: 50%; background: var(--navy); color: #fff; font-size: 12px; align-items: center; justify-content: center; }
+  .lane > .sub { color: var(--ink-2); font-size: 12.5px; margin-bottom: 12px; }
+  .device { grid-column: 1; grid-row: 1; background: var(--lane-device); border-color: #b9c9ea; }
+  .edge { grid-column: 1; grid-row: 2; background: var(--lane-edge); border-color: #d3c9ec; }
+  .svc { grid-column: 1; grid-row: 3; background: var(--lane-svc); border-color: #b9dcc7; }
+  .ext { grid-column: 3; grid-row: 1 / span 3; background: var(--lane-ext); border-color: #edd2b1; display: flex; flex-direction: column; }
+  .kb { margin-top: 46px; background: var(--lane-kb); }
+  .plat { margin-top: 26px; background: var(--lane-plat); }
+
+  .card { position: relative; background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px 11px; box-shadow: 0 1px 0 rgba(0,0,0,0.03); }
+  .card h3 { margin: 0 0 6px; font-size: 13.5px; display: flex; align-items: center; gap: 6px; }
+  .card h3 small { font-weight: 500; color: var(--ink-3); font-size: 11.5px; }
+  .card ul { margin: 0; padding-left: 15px; color: var(--ink-2); font-size: 12.2px; }
+  .card li { margin: 1px 0; }
+  .card.accent { border: 2px solid var(--navy); }
+  .card.ai { border: 2px dashed var(--saffron); }
+  .logos { display: flex; flex-wrap: wrap; gap: 5px; margin: 0 0 7px; }
+  .tech { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 7px 0 4px; border: 1px solid var(--line); border-radius: 5px; background: #fff; font-size: 11.2px; font-weight: 600; color: var(--ink-2); white-space: nowrap; }
+  .tech img { width: 14px; height: 14px; }
+  .badge { display: inline-flex; width: 15px; height: 15px; border-radius: 3px; align-items: center; justify-content: center; font-size: 8.5px; font-weight: 800; color: #fff; background: var(--c, #555); letter-spacing: -0.02em; }
+
+  .row { display: grid; gap: 40px; }
+  .pres { background: var(--navy); color: #fff; border: 0; }
+  .pres h3 { color: #fff; }
+  .pres .tech { border-color: rgba(255,255,255,0.25); }
+  .screens { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+  .screens span { background: rgba(255,255,255,0.14); border: 1px solid rgba(255,255,255,0.25); padding: 2px 8px; border-radius: 4px; font-size: 11.8px; }
+  .chain { grid-template-columns: repeat(4, 1fr); margin: 34px 0 18px; column-gap: 36px; }
+  .vault { background: #fbfcff; border: 1.5px solid #9fb4de; }
+  .vault .cols { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; color: var(--ink-2); font-size: 12.2px; }
+  .vault .cols div b { display: block; color: var(--ink); font-size: 12.4px; }
+
+  .edge .row { grid-template-columns: 340px 1fr; }
+  .svc .row { grid-template-columns: repeat(3, 1fr); row-gap: 14px; column-gap: 18px; }
+  .ext .stack { display: flex; flex-direction: column; gap: 12px; }
+  .ext .spacer { flex: 1; }
+
+  .kb .row { grid-template-columns: repeat(3, 1fr); row-gap: 40px; column-gap: 120px; }
+  .stores { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 16px; }
+  .plat .chips { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; }
+
+  .boundary { position: absolute; left: 20px; right: 20px; border-top: 2.5px dashed var(--red); }
+  .boundary span { position: absolute; right: 360px; top: -12px; background: var(--bg); color: var(--red); font-weight: 700; font-size: 11.5px; padding: 0 8px; }
+
+  svg.wires { position: absolute; inset: 0; pointer-events: none; overflow: visible; z-index: 1; }
+  .lbl { position: absolute; z-index: 2; transform: translate(-50%, -50%); background: #fff; border: 1px solid var(--line); border-radius: 4px; padding: 2px 6px; font-size: 11px; line-height: 1.3; color: var(--ink-2); max-width: 128px; text-align: center; box-shadow: 0 1px 2px rgba(0,0,0,0.06); }
+  .lbl b { color: var(--navy); }
+  .lbl.ai { border-color: var(--saffron); }
+  .step { display: inline-flex; width: 17px; height: 17px; border-radius: 50%; background: var(--saffron); color: #fff; font-size: 10.5px; font-weight: 700; align-items: center; justify-content: center; margin-right: 3px; }
+
+  .legend { display: flex; gap: 26px; margin-top: 22px; color: var(--ink-2); font-size: 12px; align-items: center; flex-wrap: wrap; }
+  .legend i { display: inline-block; vertical-align: middle; margin-right: 6px; }
+  footer { margin-top: 14px; color: var(--ink-3); font-size: 11.5px; }
+</style>
+</head>
+<body>
+<div class="canvas" id="canvas">
+  <div class="tricolour"></div>
+  <header class="top">
+    <div>
+      <h1>RejectLess — <span>Production Technical Architecture</span></h1>
+      <p>Privacy-first application-readiness platform: documents are read and validated on the citizen's device; servers only deliver code, signed knowledge and AI explanations.</p>
+    </div>
+    <div class="meta">Version 1.0 · November 2026<br />Scope: EPFO, NSP, PM-KISAN, ITR-1 and the scheme catalogue</div>
+  </header>
+
+  <div class="principles">
+    <div><b>Local-first</b>Documents never leave the device; originals are not retained.</div>
+    <div><b>Code decides, AI explains</b>Every result comes from deterministic, tested rules.</div>
+    <div><b>Source-backed rules</b>Versioned, signed rule packs with citations and effective dates.</div>
+    <div><b>Humans approve knowledge</b>AI drafts rule changes from circulars; reviewers publish.</div>
+    <div><b>Zero PII on servers</b>Only redacted summaries cross the network, with consent.</div>
+  </div>
+
+  <div class="grid" id="grid">
+    <!-- 1 · DEVICE -->
+    <section class="lane device" id="lane-device">
+      <h2><span class="num">1</span> Citizen device — Progressive Web App <small style="font-weight:500;color:var(--ink-3)">(Android · iOS · desktop browsers)</small></h2>
+      <div class="sub">All capture, reading and validation run here, in Web Workers and WebAssembly. Personal data stays inside this boundary.</div>
+
+      <div class="card pres" id="pres">
+        <h3>Presentation layer</h3>
+        <div class="logos">
+          <span class="tech"><i data-logo="nextdotjs"></i>Next.js 16</span>
+          <span class="tech"><i data-logo="react"></i>React 19</span>
+          <span class="tech"><i data-logo="typescript"></i>TypeScript</span>
+          <span class="tech"><i data-logo="tailwindcss"></i>Tailwind CSS v4</span>
+          <span class="tech"><i data-logo="pwa"></i>PWA</span>
+          <span class="tech"><i data-logo="mdnwebdocs"></i>Web Speech API</span>
+        </div>
+        <div class="screens">
+          <span>Onboarding &amp; scheme finder</span><span>Guided workspace</span><span>Results triage</span><span>Portal form autofill</span>
+          <span>Readiness report</span><span>Assistant &amp; rejection decoder</span><span>Privacy Centre</span><span>Bilingual EN / हिंदी · Listen · GIGW / UX4G accessibility</span>
+        </div>
+      </div>
+
+      <div class="row chain">
+        <div class="card" id="cap">
+          <h3>Capture</h3>
+          <div class="logos"><span class="tech"><i data-logo="webrtc"></i>WebRTC camera</span><span class="tech"><i data-logo="pdf-lib" data-badge="pl" data-c="#b5332e"></i>pdf-lib</span></div>
+          <ul>
+            <li>Smart scanner: live sheet detection, auto-capture, homography correction, document-mode enhancement</li>
+            <li>Upload PDF / JPG / PNG with magic-byte validation</li>
+            <li>Passport-photo tool: crop to portal size, compress, glare &amp; focus check</li>
+            <li>DigiLocker import (with consent)</li>
+          </ul>
+        </div>
+        <div class="card" id="read">
+          <h3>Document intelligence</h3>
+          <div class="logos"><span class="tech"><i data-logo="webassembly"></i>WebAssembly</span><span class="tech"><i data-badge="T" data-c="#2f6db5"></i>Tesseract OCR</span><span class="tech"><i data-badge="pdf" data-c="#d14d2a"></i>pdf.js</span></div>
+          <ul>
+            <li>PDF text layer + Devanagari order repair</li>
+            <li>OCR English + Hindi in a Web Worker (sparse-text mode)</li>
+            <li>Image quality: sharpness, exposure, glare, cropping</li>
+            <li>Document classifier + field extractors with page boxes</li>
+            <li>Readability gate per field</li>
+          </ul>
+        </div>
+        <div class="card accent" id="engine">
+          <h3>Validation engine <small>deterministic</small></h3>
+          <div class="logos"><span class="tech"><i data-logo="typescript"></i>Pure TypeScript</span><span class="tech"><i data-logo="zod"></i>Zod</span></div>
+          <ul>
+            <li>Unified applicant profile (documents + typed details)</li>
+            <li>Indic name matcher: transliteration, phonetic keys, token alignment</li>
+            <li>Validators: Aadhaar Verhoeff, PAN, IFSC + reference set</li>
+            <li>Rule engine running signed, versioned rule packs</li>
+            <li>Triage, evidence chain, resolution tracking</li>
+          </ul>
+        </div>
+        <div class="card" id="assist">
+          <h3>Assist &amp; output</h3>
+          <div class="logos"><span class="tech"><i data-badge="AF" data-c="#1b7a46"></i>Autofill engine</span><span class="tech"><i data-badge="jsP" data-c="#6b4fbb"></i>jsPDF</span></div>
+          <ul>
+            <li><b>Autofill:</b> portal form schemas → prefilled form with per-field provenance and mismatch flags</li>
+            <li>Scheme finder &amp; rejection-notice decoder</li>
+            <li>RAG retrieval (BM25) over the knowledge base</li>
+            <li>Redaction layer: PII scrubbed before any request</li>
+            <li>PDF readiness report</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="card vault" id="vault">
+        <h3>Local data vault</h3>
+        <div class="logos"><span class="tech"><i data-badge="IDB" data-c="#3d6fb6"></i>IndexedDB</span><span class="tech"><i data-badge="Z" data-c="#4a4a4a"></i>Zustand</span><span class="tech"><i data-badge="WC" data-c="#1f3d7a"></i>WebCrypto</span><span class="tech"><i data-logo="googlechrome"></i>Service Worker</span></div>
+        <div class="cols">
+          <div><b>Session store</b>Extracted fields, typed details, findings, history</div>
+          <div><b>Encryption at rest</b>AES-GCM with a per-session key</div>
+          <div><b>Evidence previews</b>Small page images; originals discarded after reading</div>
+          <div><b>Retention</b>24 h sliding expiry · one-tap delete</div>
+          <div><b>Offline cache</b>App shell, OCR models, rule packs, form schemas</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2 · EDGE -->
+    <section class="lane edge" id="lane-edge">
+      <h2><span class="num">2</span> Edge &amp; delivery</h2>
+      <div class="sub">Global delivery of code and signed knowledge. Every request is TLS-terminated and filtered here.</div>
+      <div class="row">
+        <div class="card" id="store">
+          <h3>Versioned asset store</h3>
+          <div class="logos"><span class="tech"><i data-logo="cloudflare"></i>Cloudflare R2</span></div>
+          <ul>
+            <li>Signed rule packs + manifest (semver, effective dates)</li>
+            <li>OCR models (eng, hin) and WASM cores</li>
+            <li>Portal form schemas for autofill</li>
+            <li>Dated IFSC reference set</li>
+          </ul>
+        </div>
+        <div class="card" id="cdn">
+          <h3>Vercel Edge Network</h3>
+          <div class="logos"><span class="tech"><i data-logo="vercel"></i>Vercel CDN</span><span class="tech"><i data-logo="vercel"></i>Firewall / WAF</span><span class="tech"><i data-logo="letsencrypt"></i>TLS 1.3</span></div>
+          <ul>
+            <li>Static app shell and code-split bundles, immutable caching</li>
+            <li>WAF, bot protection, DDoS mitigation, per-IP rate limits</li>
+            <li>Content-Security-Policy, Subresource Integrity, HSTS</li>
+            <li>Routes API traffic to application services</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3 · SERVICES -->
+    <section class="lane svc" id="lane-svc">
+      <h2><span class="num">3</span> Application services <small style="font-weight:500;color:var(--ink-3)">— Next.js Route Handlers on Vercel Functions (Node.js)</small></h2>
+      <div class="sub">Stateless and PII-free: no document, image or identifier is ever stored or logged server-side.</div>
+      <div class="row">
+        <div class="card" id="kapi">
+          <h3>Knowledge API</h3>
+          <div class="logos"><span class="tech"><i data-logo="nodedotjs"></i>Node.js</span></div>
+          <ul><li>Rule-pack manifest and version pinning</li><li>Staleness flags (last-verified &gt; 90 days)</li><li>Scheme catalogue, authorities, verification links</li></ul>
+        </div>
+        <div class="card" id="fapi">
+          <h3>Autofill schema API</h3>
+          <div class="logos"><span class="tech"><i data-logo="zod"></i>Zod schemas</span></div>
+          <ul><li>Official portal form definitions (NSP, EPFO, PM-KISAN)</li><li>Field mappings from the applicant profile</li><li>Versioned with each portal release</li></ul>
+        </div>
+        <div class="card ai" id="gw">
+          <h3>AI gateway <small>/api/assistant</small></h3>
+          <div class="logos"><span class="tech"><i data-logo="zod"></i>Zod</span><span class="tech"><i data-logo="upstash"></i>Upstash Redis</span></div>
+          <ul><li>Schema validation + server-side re-redaction</li><li>Rate limiting, prompt templates, model fallback</li><li>Citation validator: only cited KB passages pass</li></ul>
+        </div>
+        <div class="card" id="cfg">
+          <h3>Config &amp; feature flags</h3>
+          <div class="logos"><span class="tech"><i data-logo="vercel"></i>Edge Config</span></div>
+          <ul><li>Kill switches per integration and per rule pack</li><li>Gradual roll-out of new schemes</li></ul>
+        </div>
+        <div class="card" id="tel">
+          <h3>Privacy-safe telemetry</h3>
+          <div class="logos"><span class="tech"><i data-logo="opentelemetry"></i>OpenTelemetry</span></div>
+          <ul><li>Aggregate counters only (scheme, finding type)</li><li>No identifiers, no document content</li></ul>
+        </div>
+        <div class="card" id="broker">
+          <h3>Integration broker</h3>
+          <div class="logos"><span class="tech"><i data-logo="auth0" data-color="1f3d7a"></i>OAuth 2.0 + PKCE</span></div>
+          <ul><li>DigiLocker token exchange; secrets held server-side</li><li>Issued document streamed to the device, never stored</li><li>Bhashini translation / speech (text only)</li></ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4 · EXTERNAL -->
+    <section class="lane ext" id="lane-ext">
+      <h2><span class="num">4</span> External services</h2>
+      <div class="sub">Called only with the citizen's consent, through the gateway or broker.</div>
+      <div class="stack">
+        <div class="card" id="portals">
+          <h3>Official portals</h3>
+          <div class="logos"><span class="tech"><i data-logo="googlechrome"></i>Autofill extension (MV3)</span></div>
+          <ul>
+            <li>EPFO Unified Portal · National Scholarship Portal · PM-KISAN · Income Tax e-filing</li>
+            <li>Extension fills fields on the official page from the device; the citizen reviews every field; it never submits</li>
+            <li>Deep links for verification steps</li>
+          </ul>
+        </div>
+      </div>
+      <div class="spacer"></div>
+      <div class="stack" id="ext-svc">
+        <div class="card ai" id="groq">
+          <h3>Groq LLM inference</h3>
+          <div class="logos"><span class="tech"><i data-badge="G" data-c="#f55036"></i>gpt-oss-120b</span><span class="tech"><i data-badge="L" data-c="#0866ff"></i>Llama 3.3 70B fallback</span></div>
+          <ul><li>Plain-language explanations with citations</li><li>Drafting rule-change proposals (back office)</li></ul>
+        </div>
+        <div class="card" id="digi">
+          <h3>DigiLocker <small>MeitY</small></h3>
+          <div class="logos"><span class="tech"><i data-badge="DL" data-c="#2a5caa"></i>Requester API</span></div>
+          <ul><li>Issued Aadhaar, PAN, marksheets, certificates — with citizen consent</li></ul>
+        </div>
+        <div class="card" id="bhashini">
+          <h3>Bhashini <small>MeitY</small></h3>
+          <div class="logos"><span class="tech"><i data-badge="B" data-c="#e07b1a"></i>Translation · TTS · ASR</span></div>
+          <ul><li>Indian-language interface and voice</li></ul>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- PII boundary marker (positioned by script) -->
+  <div class="boundary" id="boundary"><span>PERSONAL-DATA BOUNDARY — documents and identifiers stay above this line</span></div>
+
+  <!-- 5 · KNOWLEDGE OPS -->
+  <section class="lane kb" id="lane-kb">
+    <h2><span class="num">5</span> Knowledge operations — keeping rules current <small style="font-weight:500;color:var(--ink-3)">(AI drafts, humans approve, every rule versioned and cited)</small></h2>
+    <div class="sub">A back-office pipeline turns new circulars and notifications into reviewed, tested, signed rule packs.</div>
+    <div class="row">
+      <div class="card" id="k-src">
+        <h3>Official sources</h3>
+        <div class="logos"><span class="tech"><i data-badge="GoI" data-c="#138808"></i>Source registry</span></div>
+        <ul><li>e-Gazette notifications · EPFO circulars · NSP guidelines · PIB · Income Tax · RBI IFSC master</li><li>Each source linked to the rules that depend on it</li></ul>
+      </div>
+      <div class="card" id="k-det">
+        <h3>Scheduler &amp; change detection</h3>
+        <div class="logos"><span class="tech"><i data-logo="githubactions"></i>GitHub Actions cron</span></div>
+        <ul><li>Daily fetch of every registered source</li><li>Content hashing detects new or changed documents</li></ul>
+      </div>
+      <div class="card ai" id="k-draft">
+        <h3>Extraction &amp; AI drafting</h3>
+        <div class="logos"><span class="tech"><i data-badge="T" data-c="#2f6db5"></i>OCR (Hindi + English)</span><span class="tech"><i data-badge="G" data-c="#f55036"></i>Groq</span></div>
+        <ul><li>Text extracted from PDFs and scanned circulars</li><li>LLM proposes rule changes in the rule schema, with exact quotes and page references</li></ul>
+      </div>
+      <div class="card accent" id="k-pub">
+        <h3>Sign &amp; publish</h3>
+        <div class="logos"><span class="tech"><i data-badge="sig" data-c="#1f3d7a"></i>Ed25519 signing</span><span class="tech"><i data-logo="cloudflare"></i>R2</span></div>
+        <ul><li>Versioned rule pack + manifest with effective-from / until</li><li>Devices verify signatures before use</li></ul>
+      </div>
+      <div class="card" id="k-ci">
+        <h3>CI quality gate</h3>
+        <div class="logos"><span class="tech"><i data-logo="vitest"></i>Vitest</span><span class="tech"><i data-badge="PW" data-c="#2ead33"></i>Playwright</span></div>
+        <ul><li>Unit and rule-boundary tests</li><li>Seeded scenario regression + end-to-end flows</li></ul>
+      </div>
+      <div class="card" id="k-rev">
+        <h3>Human review</h3>
+        <div class="logos"><span class="tech"><i data-logo="github"></i>Pull request</span></div>
+        <ul><li>Domain reviewer checks quotes against the source</li><li>Only approved changes are labelled "Official"</li></ul>
+      </div>
+    </div>
+    <div class="stores">
+      <div class="card"><h3>Registry database</h3><div class="logos"><span class="tech"><i data-logo="postgresql"></i>PostgreSQL</span><span class="tech"><i data-logo="neon"></i>Neon</span></div><ul><li>Sources, rule versions, approvals, audit log</li></ul></div>
+      <div class="card"><h3>Public circular archive</h3><div class="logos"><span class="tech"><i data-logo="cloudflare"></i>R2</span></div><ul><li>Snapshots of public source documents only — never citizen data</li></ul></div>
+      <div class="card"><h3>Staleness monitor</h3><div class="logos"><span class="tech"><i data-logo="grafana"></i>Grafana alerts</span></div><ul><li>Flags rules not re-verified in 90 days; devices show "check the portal"</li></ul></div>
+    </div>
+  </section>
+
+  <!-- 6 · PLATFORM -->
+  <section class="lane plat" id="lane-plat">
+    <h2><span class="num">6</span> Platform, delivery &amp; operations</h2>
+    <div class="sub">Cross-cutting tooling for every layer above.</div>
+    <div class="chips">
+      <div class="card"><h3>Source &amp; reviews</h3><div class="logos"><span class="tech"><i data-logo="github"></i>GitHub</span></div><ul><li>Monorepo, protected main, CODEOWNERS for rules</li></ul></div>
+      <div class="card"><h3>CI/CD</h3><div class="logos"><span class="tech"><i data-logo="githubactions"></i>GitHub Actions</span><span class="tech"><i data-logo="vercel"></i>Vercel</span></div><ul><li>Lint, type-check, tests, preview deploy per PR</li></ul></div>
+      <div class="card"><h3>Testing</h3><div class="logos"><span class="tech"><i data-logo="vitest"></i>Vitest</span><span class="tech"><i data-badge="PW" data-c="#2ead33"></i>Playwright</span></div><ul><li>Engine, extraction, rules, scenarios, devices</li></ul></div>
+      <div class="card"><h3>Error monitoring</h3><div class="logos"><span class="tech"><i data-logo="sentry"></i>Sentry</span></div><ul><li>PII scrubbing before send; no session replay</li></ul></div>
+      <div class="card"><h3>Observability</h3><div class="logos"><span class="tech"><i data-logo="opentelemetry"></i>OTel</span><span class="tech"><i data-logo="grafana"></i>Grafana</span></div><ul><li>Latency, error budgets, AI cost per request</li></ul></div>
+      <div class="card"><h3>Security</h3><div class="logos"><span class="tech"><i data-logo="github"></i>Dependabot</span><span class="tech"><i data-logo="vercel"></i>Encrypted env</span></div><ul><li>Secret rotation, dependency and licence scanning</li></ul></div>
+    </div>
+  </section>
+
+  <div class="legend">
+    <span><i style="width:34px;border-top:2px solid #1f3d7a"></i>Request / data flow</span>
+    <span><i style="width:34px;border-top:2px dashed #d9771f"></i>AI call (consented, redacted)</span>
+    <span><i style="width:34px;border-top:2.5px dashed #c0392b"></i>Personal-data boundary</span>
+    <span><i class="step">1</i>Citizen journey order</span>
+    <span><i style="width:16px;height:12px;border:2px solid #1f3d7a;border-radius:3px"></i>Decision-making component</span>
+    <span><i style="width:16px;height:12px;border:2px dashed #d9771f;border-radius:3px"></i>AI component (explains or drafts, never decides)</span>
+  </div>
+  <footer>Logos are trademarks of their respective owners (Simple Icons, CC0). Components without a public logo are shown with a name badge.</footer>
+
+  <svg class="wires" id="wires"><defs>
+    <marker id="a-navy" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#1f3d7a"/></marker>
+    <marker id="a-saff" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#d9771f"/></marker>
+  </defs></svg>
+</div>
+
+<script>
+(() => {
+  const canvas = document.getElementById("canvas");
+  const svg = document.getElementById("wires");
+  const box = (id) => {
+    const c = canvas.getBoundingClientRect(), r = document.getElementById(id).getBoundingClientRect();
+    return { l: r.left - c.left, r: r.right - c.left, t: r.top - c.top, b: r.bottom - c.top, cx: (r.left + r.right) / 2 - c.left, cy: (r.top + r.bottom) / 2 - c.top };
+  };
+  const at = (id, side, f = 0.5) => {
+    const b = box(id);
+    if (side === "r") return [b.r, b.t + (b.b - b.t) * f];
+    if (side === "l") return [b.l, b.t + (b.b - b.t) * f];
+    if (side === "t") return [b.l + (b.r - b.l) * f, b.t];
+    return [b.l + (b.r - b.l) * f, b.b];
+  };
+  const draw = (pts, { ai = false, label, lpos, step } = {}) => {
+    const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    p.setAttribute("d", "M" + pts.map((q) => q.join(" ")).join(" L"));
+    p.setAttribute("fill", "none");
+    p.setAttribute("stroke", ai ? "#d9771f" : "#1f3d7a");
+    p.setAttribute("stroke-width", "2");
+    if (ai) p.setAttribute("stroke-dasharray", "6 4");
+    p.setAttribute("marker-end", `url(#${ai ? "a-saff" : "a-navy"})`);
+    svg.appendChild(p);
+    if (label) {
+      const d = document.createElement("div");
+      d.className = "lbl" + (ai ? " ai" : "");
+      d.innerHTML = (step ? `<span class="step">${step}</span>` : "") + label;
+      d.style.whiteSpace = label.length < 26 ? "nowrap" : "";
+      if (label.includes("width:")) d.style.maxWidth = "none";
+      const [x, y] = lpos || mid(pts);
+      d.style.left = x + "px";
+      d.style.top = y + "px";
+      canvas.appendChild(d);
+    }
+  };
+  const mid = (pts) => {
+    let best = 0, k = 0;
+    for (let i = 1; i < pts.length; i++) { const L = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); if (L > best) { best = L; k = i; } }
+    return [(pts[k][0] + pts[k - 1][0]) / 2, (pts[k][1] + pts[k - 1][1]) / 2];
+  };
+  const h = (a, b) => { const [ax, ay] = a, [bx, by] = b; const mx = (ax + bx) / 2; return ay === by ? [a, b] : [a, [mx, ay], [mx, by], b]; };
+  const v = (a, b) => { const [ax, ay] = a, [bx, by] = b; const my = (ay + by) / 2; return ax === bx ? [a, b] : [a, [ax, my], [bx, my], b]; };
+
+  // Boundary line between the device lane and the edge lane.
+  const dev = box("lane-device"), edg = box("lane-edge");
+  const boundary = document.getElementById("boundary");
+  boundary.style.top = dev.b + 22 + "px";
+  boundary.style.right = (canvas.clientWidth - dev.r - 12) + "px";
+  const cap = boundary.querySelector("span"); cap.style.right = "auto"; cap.style.left = "24px";
+
+  // Citizen journey on the device.
+  draw(h(at("cap", "r"), at("read", "l")), { step: 1, label: "image / PDF", lpos: [(box("cap").r + box("read").l) / 2, box("cap").t - 14] });
+  draw(h(at("read", "r"), at("engine", "l")), { step: 2, label: "fields + page boxes", lpos: [(box("read").r + box("engine").l) / 2, box("read").t - 14] });
+  draw(h(at("engine", "r"), at("assist", "l")), { step: 3, label: "findings + evidence", lpos: [(box("engine").r + box("assist").l) / 2, box("engine").t - 14] });
+
+  // Autofill handoff to the official portal.
+  draw(h(at("assist", "r", 0.35), at("portals", "l", 0.5)), { step: 4, label: "<b>Autofill</b>: citizen-approved fill on the official form, on device", lpos: [(box("assist").r + box("portals").l) / 2, box("assist").cy + 64] });
+
+  // Device <-> edge.
+  const vlt = box("vault"), cdn = box("cdn");
+  const x1 = cdn.l + 300, x2 = cdn.l + 560;
+  draw([[x1, cdn.t], [x1, vlt.b]], { label: "<span style='display:inline-block;width:210px'>app shell · OCR models · signed rule packs · form schemas</span>", lpos: [x1, dev.b + 54] });
+  draw([[x2, vlt.b], [x2, cdn.t]], { ai: true, step: 5, label: "<span style='display:inline-block;width:200px'><b>Explain this</b>: redacted question + finding summaries only</span>", lpos: [x2, dev.b + 54] });
+
+  // Asset store -> CDN (origin).
+  draw(h(at("store", "r"), at("cdn", "l")), { label: "origin", lpos: [(box("store").r + box("cdn").l) / 2, box("store").cy - 14] });
+
+  // Edge -> AI gateway.
+  const gw = box("gw");
+  draw([[gw.cx, cdn.b], [gw.cx, gw.t]], { ai: true, label: "<span style='display:inline-block;width:150px'>HTTPS: gateway, knowledge &amp; schema APIs</span>", lpos: [gw.cx + 96, (box("lane-edge").b + box("lane-svc").t) / 2] });
+
+  // Services -> external.
+  draw(h(at("gw", "r"), at("groq", "l", 0.4)), { ai: true, label: "summaries + KB passages", lpos: [(gw.r + box("groq").l) / 2, at("groq", "l", 0.4)[1] - 20] });
+  const br = box("broker");
+  draw(h(at("broker", "r", 0.35), at("digi", "l")), { label: "OAuth 2.0 + PKCE", lpos: [(br.r + box("digi").l) / 2, at("broker", "r", 0.35)[1] - 16] });
+  draw(h(at("broker", "r", 0.75), at("bhashini", "l")), { label: "text only", lpos: [(br.r + box("bhashini").l) / 2, at("broker", "r", 0.75)[1] + 16] });
+
+  // Knowledge pipeline (snake: left→right on top, right→left below).
+  draw(h(at("k-src", "r"), at("k-det", "l")), { label: "registered URLs" });
+  draw(h(at("k-det", "r"), at("k-draft", "l")), { label: "changed document" });
+  draw(v(at("k-draft", "b"), at("k-rev", "t")), { ai: true, label: "draft rule diff + quotes", lpos: [box("k-draft").cx + 92, (box("k-draft").b + box("k-rev").t) / 2] });
+  draw(h(at("k-rev", "l"), at("k-ci", "r")), { label: "approved" });
+  draw(h(at("k-ci", "l"), at("k-pub", "r")), { label: "green" });
+
+  // Publish -> asset store, routed up the left margin.
+  const pub = box("k-pub"), store = box("store");
+  document.title = "RejectLess architecture · h=" + Math.ceil(canvas.getBoundingClientRect().bottom + 8);
+  draw([[pub.l, pub.cy], [10, pub.cy], [10, store.cy], [store.l, store.cy]], { label: "<span style='display:inline-block;width:170px'>publish signed rule pack vN</span>", lpos: [110, box("lane-kb").t - 23] });
+})();
+</script>
+</body>
+</html>
