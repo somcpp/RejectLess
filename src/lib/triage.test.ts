@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Finding } from "@/engine/types";
-import { bucketOf, groupFindings, missingDocType } from "./triage";
+import { BUCKETS, bucketOf, groupFindings, missingDocType } from "./triage";
 
 const base: Finding = {
   key: "X",
@@ -23,16 +23,20 @@ const base: Finding = {
 };
 
 describe("triage buckets", () => {
+  it("has the five sections in the agreed order", () => {
+    expect(BUCKETS.map((b) => b.id)).toEqual(["passed", "documents", "review", "verify", "external"]);
+  });
   it("keeps engine statuses for pass / external", () => {
     expect(bucketOf({ ...base, status: "passed" })).toBe("passed");
     expect(bucketOf({ ...base, status: "external" })).toBe("external");
   });
-  it("splits action vs review", () => {
-    expect(bucketOf({ ...base, status: "action" })).toBe("action");
+  it("mismatches of either severity go to 'needs review'", () => {
+    expect(bucketOf({ ...base, status: "action" })).toBe("review");
     expect(bucketOf({ ...base, status: "review" })).toBe("review");
   });
-  it("sends missing documents and 'could not check' to the documents group", () => {
+  it("missing documents, poor photos and 'could not check' go to 'documents needed'", () => {
     expect(bucketOf({ ...base, ruleId: "GEN-DOCS", key: "GEN-DOCS:pan" })).toBe("documents");
+    expect(bucketOf({ ...base, ruleId: "GEN-QUALITY", key: "GEN-QUALITY:doc1" })).toBe("documents");
     expect(bucketOf({ ...base, status: "review", missingInput: "date of exit" })).toBe("documents");
     expect(missingDocType({ ...base, ruleId: "GEN-DOCS", key: "GEN-DOCS:pan" })).toBe("pan");
     expect(missingDocType(base)).toBeUndefined();

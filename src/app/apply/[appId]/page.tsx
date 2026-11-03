@@ -26,7 +26,7 @@ export default async function OverviewPage({ params }: PageProps<"/apply/[appId]
   return (
     <>
       <SiteHeader />
-      <main className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6">
+      <main id="main" className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6">
         <Link href="/apply" className="inline-flex items-center gap-1 text-[14px] text-ink-3 hover:text-ink">
           <ChevronLeft className="size-4" /> All applications
         </Link>

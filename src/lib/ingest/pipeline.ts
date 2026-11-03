@@ -3,6 +3,8 @@
 import type { DocTypeId, DocumentRecord, QualityIssue, QualityReport, TextLine } from "@/engine/types";
 import { classify, extractFields } from "@/engine/extract";
 import { assess, measure } from "@/engine/quality";
+import { readability } from "@/engine/readability";
+import { applyDemoOverrides } from "@/lib/demoOverrides";
 import { fileToCanvas, previewBlob, toGray } from "./raster";
 import { ocrCanvas } from "./ocr";
 import { readPdf } from "./pdf";
@@ -87,12 +89,16 @@ export async function processFile(file: File, forcedType: DocTypeId | undefined,
   const typeId = forcedType ?? (cls.typeId !== "unknown" ? cls.typeId : (hintType ?? "unknown"));
 
   progress("Extracting details");
-  const { fields, missingFields } = extractFields(typeId, allLines, method);
+  const extracted = extractFields(typeId, allLines, method);
+  const fields = applyDemoOverrides(typeId, extracted.fields);
+  const missingFields = extracted.missingFields.filter((k) => !fields.some((f) => f.key === k));
 
   progress("Preparing preview");
   const previews = await Promise.all(pages.map((p) => previewBlob(p.canvas)));
 
-  const needsAttention = quality.issues.length > 0 || missingFields.length > 0 || typeId === "unknown";
+  // "Needs attention" only when something the user must act on remains after reading.
+  const r = readability({ typeId, fields, quality });
+  const needsAttention = r.issues.length > 0 || !r.readWell;
   return {
     record: {
       mimeType: file.type || (kind === "pdf" ? "application/pdf" : "image/jpeg"),

@@ -4,15 +4,17 @@ import type { ComponentProps, ReactNode } from "react";
 import type { FindingStatus, RuleBasis, Severity } from "@/engine/types";
 import { CheckCircle2, CircleAlert, CircleHelp, Globe2, ShieldCheck, TriangleAlert } from "lucide-react";
 
-type Variant = "primary" | "secondary" | "ghost" | "danger";
+type Variant = "primary" | "secondary" | "ghost" | "danger" | "saffron";
 type Size = "sm" | "md" | "lg";
 
+// Square-cornered, solid buttons as on government portals; saffron is the "go" action.
 const btnBase =
-  "inline-flex items-center justify-center gap-2 rounded-[10px] font-medium transition-colors disabled:opacity-50 disabled:pointer-events-none whitespace-nowrap";
+  "inline-flex items-center justify-center gap-2 rounded-sm font-semibold transition-colors disabled:opacity-50 disabled:pointer-events-none whitespace-nowrap";
 const btnVariants: Record<Variant, string> = {
-  primary: "bg-accent text-white hover:bg-accent-hover shadow-[0_1px_0_rgba(0,0,0,0.08)]",
-  secondary: "bg-surface text-ink border border-line-strong hover:bg-surface-2",
-  ghost: "text-ink-2 hover:bg-black/[0.04]",
+  primary: "bg-accent text-white hover:bg-accent-hover",
+  saffron: "bg-saffron text-white hover:bg-saffron-hover",
+  secondary: "bg-surface text-accent border border-accent hover:bg-accent-soft",
+  ghost: "text-accent hover:bg-accent-soft",
   danger: "bg-action text-white hover:bg-[#931f18]",
 };
 const btnSizes: Record<Size, string> = { sm: "h-8 px-3 text-[13px]", md: "h-10 px-4 text-sm", lg: "h-12 px-5 text-[15px]" };
@@ -34,7 +36,12 @@ export function Card({ className, ...props }: ComponentProps<"div">) {
 }
 
 export function Eyebrow({ children, className }: { children: ReactNode; className?: string }) {
-  return <p className={clsx("text-[12px] font-semibold uppercase tracking-[0.08em] text-ink-3", className)}>{children}</p>;
+  return (
+    <p className={clsx("flex items-center gap-2 text-[12px] font-bold uppercase tracking-[0.08em] text-saffron", className)}>
+      <span className="h-3 w-1 bg-saffron" aria-hidden />
+      {children}
+    </p>
+  );
 }
 
 export const STATUS_META: Record<FindingStatus, { label: string; short: string; fg: string; bg: string; Icon: typeof CheckCircle2 }> = {

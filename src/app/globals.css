@@ -1,19 +1,25 @@
 @import "tailwindcss";
 
-/* RejectLess design tokens — warm neutral surfaces, charcoal ink, restrained teal.
-   Red / amber / green / blue are reserved for validation states. */
+/* RejectLess design tokens — modelled on Indian government portals (GIGW / UX4G look):
+   navy primary, saffron accent, India-green success, light grey page, white boxed panels
+   with square corners. Red / amber / green / blue remain reserved for validation states. */
 :root {
-  --bg: #f7f5f0;
+  --bg: #eef1f5;
   --surface: #ffffff;
-  --surface-2: #fbfaf7;
-  --ink: #1e2124;
-  --ink-2: #474c52;
-  --ink-3: #6b7076;
-  --line: #e5e0d6;
-  --line-strong: #d4cdbf;
-  --accent: #0f6e5f;
-  --accent-hover: #0b5a4e;
-  --accent-soft: #e4f0ec;
+  --surface-2: #f6f8fb;
+  --ink: #1c2433;
+  --ink-2: #3f4a5c;
+  --ink-3: #66718a;
+  --line: #cfd6e0;
+  --line-strong: #a9b4c4;
+  --accent: #1f3d7a;
+  --accent-hover: #162d5c;
+  --accent-soft: #e6ecf7;
+  --navy-deep: #12244a;
+  --saffron: #d6621a;
+  --saffron-hover: #b8500f;
+  --saffron-soft: #fff1e6;
+  --india-green: #138808;
   --pass: #1d7348;
   --pass-soft: #e7f3ec;
   --review: #9a5b06;
@@ -36,6 +42,11 @@
   --color-accent: var(--accent);
   --color-accent-hover: var(--accent-hover);
   --color-accent-soft: var(--accent-soft);
+  --color-navy-deep: var(--navy-deep);
+  --color-saffron: var(--saffron);
+  --color-saffron-hover: var(--saffron-hover);
+  --color-saffron-soft: var(--saffron-soft);
+  --color-india-green: var(--india-green);
   --color-pass: var(--pass);
   --color-pass-soft: var(--pass-soft);
   --color-review: var(--review);
@@ -44,9 +55,16 @@
   --color-action-soft: var(--action-soft);
   --color-external: var(--external);
   --color-external-soft: var(--external-soft);
-  --font-sans: var(--font-inter), var(--font-devanagari), system-ui, sans-serif;
-  --font-dev: var(--font-devanagari), var(--font-inter), sans-serif;
-  --radius-card: 14px;
+  --font-sans: var(--font-body), var(--font-devanagari), "Segoe UI", Arial, sans-serif;
+  --font-dev: var(--font-devanagari), var(--font-body), sans-serif;
+  /* Government portals are square-cornered. Existing rounded-* classes map onto these. */
+  --radius-sm: 2px;
+  --radius-md: 3px;
+  --radius-lg: 4px;
+  --radius-xl: 4px;
+  --radius-2xl: 6px;
+  --radius-3xl: 6px;
+  --radius-card: 4px;
 }
 
 html {
@@ -57,17 +75,20 @@ html {
 
 body {
   font-family: var(--font-sans);
-  font-feature-settings: "cv11", "ss01";
+}
+
+h1, h2, h3 {
+  letter-spacing: 0;
 }
 
 ::selection {
-  background: var(--accent-soft);
+  background: var(--saffron-soft);
 }
 
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 3px solid var(--saffron);
   outline-offset: 2px;
-  border-radius: 6px;
+  border-radius: 2px;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -81,6 +102,44 @@ body {
 
 .tabular {
   font-variant-numeric: tabular-nums;
+}
+
+/* "Skip to main content" — first focusable element on every page (GIGW). */
+.skip-link {
+  position: absolute;
+  left: 8px;
+  top: -48px;
+  z-index: 100;
+  padding: 8px 14px;
+  background: var(--saffron);
+  color: #fff;
+  font-weight: 600;
+  border-radius: 0 0 4px 4px;
+  transition: top 0.15s;
+}
+.skip-link:focus {
+  top: 0;
+}
+
+/* Boxed panel with a coloured header strip, the staple of NIC-built portals. */
+.gov-panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+}
+.gov-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+  font-size: 14px;
+  border-radius: var(--radius-card) var(--radius-card) 0 0;
+}
+.gov-panel-head.saffron {
+  background: var(--saffron);
 }
 
 /* Step transitions — short, directional, and disabled for reduced motion (rule above). */

@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import clsx from "clsx";
 import {
-  CheckCircle2, ChevronDown, CircleHelp, CloudDownload, Download, ExternalLink, FileSearch, Globe2, MessageCircleQuestion, Pencil, RotateCw, TriangleAlert, Upload,
+  CheckCircle2, ChevronDown, CircleHelp, ClipboardPen, CloudDownload, Download, ExternalLink, FileSearch, Globe2, MessageCircleQuestion, Pencil, RotateCw, SearchCheck, TriangleAlert, Upload, Wrench,
 } from "lucide-react";
 import type { DocTypeId, Finding } from "@/engine/types";
 import { Button, Spinner } from "@/components/ui";
@@ -20,15 +20,16 @@ import { resolvedIssues } from "@/lib/reportData";
 import { BUCKETS, groupFindings, missingDocType, type Bucket } from "@/lib/triage";
 import { DOC_TYPES } from "@/knowledge/documents";
 import { DOC_SOURCES, getAuthority } from "@/knowledge/authorities";
+import { CORRECTIONS, verificationsFor, type Verification } from "@/knowledge/verifications";
 import { DRAFT_LABEL } from "@/engine/profile";
 import { inputSignature } from "@/lib/useRunCheck";
 
-const BUCKET_UI: Record<Bucket, { Icon: typeof CheckCircle2; fg: string; bg: string; ring: string }> = {
-  action: { Icon: TriangleAlert, fg: "text-action", bg: "bg-action-soft", ring: "border-action" },
-  documents: { Icon: FileSearch, fg: "text-external", bg: "bg-external-soft", ring: "border-external" },
-  review: { Icon: CircleHelp, fg: "text-review", bg: "bg-review-soft", ring: "border-review" },
-  external: { Icon: Globe2, fg: "text-external", bg: "bg-external-soft", ring: "border-external" },
-  passed: { Icon: CheckCircle2, fg: "text-pass", bg: "bg-pass-soft", ring: "border-pass" },
+const BUCKET_UI: Record<Bucket, { Icon: typeof CheckCircle2; fg: string; bg: string }> = {
+  passed: { Icon: CheckCircle2, fg: "text-pass", bg: "bg-pass-soft" },
+  documents: { Icon: FileSearch, fg: "text-external", bg: "bg-external-soft" },
+  review: { Icon: Wrench, fg: "text-action", bg: "bg-action-soft" },
+  verify: { Icon: SearchCheck, fg: "text-accent", bg: "bg-accent-soft" },
+  external: { Icon: Globe2, fg: "text-external", bg: "bg-external-soft" },
 };
 
 export function ResultsStep() {
@@ -39,23 +40,21 @@ export function ResultsStep() {
   if (!session || !app || !latestRun) return null;
 
   const groups = groupFindings(latestRun.findings);
-  const todo = groups.action.length + groups.documents.length;
-  const toLook = groups.review.length;
+  const verifications = verificationsFor(app.id, session.profile?.state);
+  const counts: Record<Bucket, number> = { passed: groups.passed.length, documents: groups.documents.length, review: groups.review.length, verify: verifications.length, external: groups.external.length };
+  const todo = counts.documents + counts.review;
   const fixed = resolvedIssues(session);
   const changedSinceRun = !!latestRun.inputSig && latestRun.inputSig !== inputSignature(session);
   const auth = getAuthority(app.id);
-  // Open on the first group that has something to do, so the next step is obvious.
-  const active: Bucket = chosen ?? BUCKETS.find((b) => groups[b.id].length)?.id ?? "passed";
+  // Start on what needs doing; otherwise on what passed.
+  const active: Bucket = chosen ?? (counts.documents ? "documents" : counts.review ? "review" : "passed");
   const meta = BUCKETS.find((b) => b.id === active)!;
+  const Icon = BUCKET_UI[active].Icon;
 
-  const headline = todo
-    ? `${todo} thing${todo > 1 ? "s" : ""} to do before you apply`
-    : toLook
-      ? `Nothing to fix — ${toLook} thing${toLook > 1 ? "s" : ""} worth a look`
-      : "Everything we could check looks right";
+  const headline = todo ? `${todo} thing${todo > 1 ? "s" : ""} to do before you apply` : "Everything we could check looks right";
   const sub = todo
-    ? `${groups.action.length ? `${groups.action.length} to fix` : ""}${groups.action.length && groups.documents.length ? ", " : ""}${groups.documents.length ? `${groups.documents.length} document${groups.documents.length > 1 ? "s" : ""} or detail${groups.documents.length > 1 ? "s" : ""} needed` : ""}. Start with the first group — each card says what to do.`
-    : `Before you apply, confirm the items under “Confirm on portal”. This isn't an approval — only ${app.shortName} can approve your application.`;
+    ? `${counts.documents ? `${counts.documents} document${counts.documents > 1 ? "s" : ""} or detail${counts.documents > 1 ? "s" : ""} needed` : ""}${counts.documents && counts.review ? ", " : ""}${counts.review ? `${counts.review} to review` : ""}. Work down the list on the left.`
+    : `Confirm the external verifications and the portal items on the left before you apply. This isn't an approval — only ${app.shortName} can approve your application.`;
 
   async function download() {
     setBusy(true);
@@ -69,16 +68,15 @@ export function ResultsStep() {
 
   return (
     <div>
-      <div className="mb-6">
-        <p className="mb-2 text-[13px] font-medium text-accent">Your results</p>
-        {!todo && !toLook && <CheckCircle2 className="mb-3 size-10 text-pass" />}
-        <h1 className="text-[28px] font-semibold leading-tight tracking-tight sm:text-[32px]">{headline}</h1>
+      <div className="mb-6 border-l-4 border-saffron pl-4">
+        <p className="mb-1.5 text-[12px] font-bold uppercase tracking-wide text-saffron">Your results · नतीजे</p>
+        <h1 className="text-[26px] font-bold leading-tight text-accent sm:text-[30px]">{headline}</h1>
         <p className="mt-2 text-[16px] text-ink-2">{sub}</p>
-        <ReadAloud className="mt-3" text={`${headline}. ${sub} ${BUCKETS.map((b) => `${b.label}: ${groups[b.id].length}.`).join(" ")}`} />
+        <ReadAloud className="mt-3" text={`${headline}. ${sub} ${BUCKETS.map((b) => `${b.label}: ${counts[b.id]}.`).join(" ")}`} />
       </div>
 
       {changedSinceRun && (
-        <div className="mb-5 flex flex-col gap-3 rounded-2xl border border-accent/30 bg-accent-soft/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mb-5 flex flex-col gap-3 border border-accent/30 bg-accent-soft/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-[14px]">You changed something since this check. Check again to see if it&rsquo;s fixed.</p>
           <Button onClick={() => setGuideStep("check")}>
             <RotateCw className="size-4" /> Check again
@@ -86,72 +84,51 @@ export function ResultsStep() {
         </div>
       )}
 
-      {/* Five groups: one tap each, always visible */}
-      <div className="grid grid-cols-5 gap-1.5 sm:gap-2" role="tablist" aria-label="Result groups">
-        {BUCKETS.map((b) => {
-          const ui = BUCKET_UI[b.id];
-          const n = groups[b.id].length;
-          const on = active === b.id;
-          return (
-            <button
-              key={b.id}
-              role="tab"
-              aria-selected={on}
-              onClick={() => setChosen(b.id)}
-              className={clsx(
-                "flex min-w-0 flex-col items-center gap-1 rounded-2xl border bg-surface px-1 py-3 text-center transition-all sm:px-2",
-                on ? `${ui.ring} ring-2 ring-current/20 ${ui.fg}` : "border-line text-ink-3 hover:border-line-strong",
-                !n && !on && "opacity-60",
-              )}
-            >
-              <span className={clsx("flex size-9 items-center justify-center rounded-xl", ui.bg, ui.fg)}>
-                <ui.Icon className="size-5" />
-              </span>
-              <span className={clsx("text-[20px] font-semibold leading-none tabular", n ? ui.fg : "text-ink-3")}>{n}</span>
-              <span className={clsx("w-full truncate text-[11px] leading-tight sm:text-[12px]", on ? "font-medium text-ink" : "text-ink-3")}>{b.label}</span>
-              <span className="font-dev hidden w-full truncate text-[11px] text-ink-3 sm:block">{b.labelHi}</span>
-            </button>
-          );
-        })}
-      </div>
+      <div className="grid gap-5 lg:grid-cols-[260px_minmax(0,1fr)]">
+        {/* Left: the five sections, vertical */}
+        <nav aria-label="Result sections" className="lg:sticky lg:top-40 lg:self-start">
+          <ol className="gov-panel flex overflow-x-auto lg:block">
+            {BUCKETS.map((b, i) => {
+              const ui = BUCKET_UI[b.id];
+              const on = active === b.id;
+              const n = counts[b.id];
+              return (
+                <li key={b.id} className="min-w-[150px] flex-1 border-b border-line last:border-b-0 lg:min-w-0">
+                  <button
+                    onClick={() => setChosen(b.id)}
+                    aria-current={on ? "true" : undefined}
+                    className={clsx("flex w-full items-center gap-3 border-l-4 px-3 py-3 text-left transition-colors", on ? "border-saffron bg-accent-soft/60" : "border-transparent hover:bg-surface-2")}
+                  >
+                    <span className={clsx("flex size-9 shrink-0 items-center justify-center", ui.bg, ui.fg)}>
+                      <ui.Icon className="size-5" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className={clsx("block text-[14px] leading-tight", on ? "font-bold text-accent" : "font-semibold text-ink")}>{i + 1}. {b.label}</span>
+                      <span className="font-dev block truncate text-[12px] text-ink-3">{b.labelHi}</span>
+                    </span>
+                    <span className={clsx("shrink-0 min-w-7 px-1.5 py-0.5 text-center text-[13px] font-bold tabular", n ? `${ui.bg} ${ui.fg}` : "bg-surface-2 text-ink-3")}>{n}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ol>
+        </nav>
 
-      <section key={active} className="rise mt-5" role="tabpanel">
-        <div className="mb-3 flex items-start gap-3">
-          <span className={clsx("flex size-9 shrink-0 items-center justify-center rounded-xl", BUCKET_UI[active].bg, BUCKET_UI[active].fg)}>
-            {(() => {
-              const I = BUCKET_UI[active].Icon;
-              return <I className="size-5" />;
-            })()}
-          </span>
-          <div>
-            <h2 className="text-[18px] font-semibold leading-snug">
-              {meta.label} <span className="font-dev text-[14px] font-normal text-ink-3">· {meta.labelHi}</span>
-            </h2>
-            <p className="text-[14px] text-ink-2">{meta.blurb}</p>
+        {/* Right: the active section */}
+        <section key={active} className="rise min-w-0" aria-live="polite">
+          <div className="gov-panel-head">
+            <Icon className="size-4" /> {meta.label} <span className="font-dev font-normal opacity-80">· {meta.labelHi}</span>
           </div>
-        </div>
-
-        {groups[active].length === 0 && (
-          <p className="rounded-2xl border border-dashed border-line px-5 py-6 text-center text-[15px] text-ink-3">Nothing here. {active === "action" ? "No errors were found in your documents or details." : ""}</p>
-        )}
-
-        {(active === "action" || active === "review") && (
-          <ul className="space-y-3">
-            {groups[active].map((f, i) => (
-              <IssueCard key={f.key} f={f} index={i} />
-            ))}
-          </ul>
-        )}
-        {active === "documents" && (
-          <ul className="space-y-3">
-            {groups.documents.map((f, i) => (
-              <NeededCard key={f.key} f={f} index={i} />
-            ))}
-          </ul>
-        )}
-        {active === "external" && <ExternalChecklist findings={groups.external} portal={app.officialPortal} />}
-        {active === "passed" && <PassedByDocument findings={groups.passed} />}
-      </section>
+          <div className="border border-t-0 border-line bg-surface-2 px-4 py-3 text-[14px] text-ink-2">{meta.blurb}</div>
+          <div className="mt-4">
+            {active === "passed" && <PassedByDocument findings={groups.passed} />}
+            {active === "documents" && (counts.documents ? <ul className="space-y-3">{groups.documents.map((f, i) => <NeededCard key={f.key} f={f} index={i} />)}</ul> : <Empty text="Every document we need is here and readable." />)}
+            {active === "review" && (counts.review ? <ul className="space-y-3">{groups.review.map((f, i) => <IssueCard key={f.key} f={f} index={i} />)}</ul> : <Empty text="No mismatches between your documents and details." />)}
+            {active === "verify" && <VerificationList items={verifications} />}
+            {active === "external" && <ExternalChecklist findings={groups.external} portal={app.officialPortal} />}
+          </div>
+        </section>
+      </div>
 
       {fixed.length > 0 && (
         <Section icon={<CheckCircle2 className="size-4 text-pass" />} title={`Fixed since your first check (${fixed.length})`}>
@@ -167,7 +144,7 @@ export function ResultsStep() {
 
       {auth && (
         <div className="mt-6">
-          <p className="mb-2 text-[13px] font-medium text-ink-3">{todo ? "When everything above is done, apply here" : "Ready? Apply here"}</p>
+          <p className="mb-2 text-[13px] font-semibold text-ink-3">{todo ? "When everything above is done, apply here" : "Ready? Apply here"}</p>
           <AuthorityCard a={auth} compact />
         </div>
       )}
@@ -179,8 +156,13 @@ export function ResultsStep() {
         <Button size="lg" variant="secondary" onClick={download} disabled={busy}>
           {busy ? <Spinner /> : <Download className="size-4" />} Download report
         </Button>
+        {app.id === "nsp-csss" && (
+          <a href="/forms/nsp" target="_blank" rel="noreferrer" className="inline-flex h-12 items-center justify-center gap-2 rounded-sm border border-accent bg-surface px-5 text-[15px] font-semibold text-accent hover:bg-accent-soft" title="Opens in a new tab">
+            <ClipboardPen className="size-4" /> Open scholarship application
+          </a>
+        )}
         {!todo && app.officialPortal && (
-          <a href={app.officialPortal} target="_blank" rel="noreferrer" className="inline-flex h-12 items-center justify-center gap-2 rounded-[10px] bg-accent px-5 text-[15px] font-medium text-white hover:bg-accent-hover">
+          <a href={app.officialPortal} target="_blank" rel="noreferrer" className="inline-flex h-12 items-center justify-center gap-2 rounded-sm bg-saffron px-5 text-[15px] font-semibold text-white hover:bg-saffron-hover">
             Open the official portal <ExternalLink className="size-4" />
           </a>
         )}
@@ -189,13 +171,17 @@ export function ResultsStep() {
   );
 }
 
+function Empty({ text }: { text: string }) {
+  return <p className="border border-dashed border-line px-5 py-6 text-center text-[15px] text-ink-3">{text}</p>;
+}
+
 function Section({ icon, title, children, defaultOpen = false }: { icon: React.ReactNode; title: string; children: React.ReactNode; defaultOpen?: boolean }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <section className="mt-4 rounded-2xl border border-line bg-surface">
+    <section className="gov-panel mt-4">
       <button onClick={() => setOpen(!open)} className="flex w-full items-center gap-2 px-5 py-4 text-left" aria-expanded={open}>
         {icon}
-        <span className="flex-1 font-medium">{title}</span>
+        <span className="flex-1 font-semibold">{title}</span>
         <ChevronDown className={clsx("size-4 text-ink-3 transition-transform", open && "rotate-180")} />
       </button>
       {open && <div className="rise px-5 pb-5">{children}</div>}
@@ -203,9 +189,10 @@ function Section({ icon, title, children, defaultOpen = false }: { icon: React.R
   );
 }
 
-// ---------------------------------------------------------------------------- passed, by document
+// ---------------------------------------------------------------------------- 1. passed, by document
 
 function PassedByDocument({ findings }: { findings: Finding[] }) {
+  const docs = useSession((s) => s.session?.documents) ?? [];
   // "Aadhaar — Name, Date of birth": which document, which details.
   const byDoc = new Map<string, Set<string>>();
   const general: Finding[] = [];
@@ -220,23 +207,31 @@ function PassedByDocument({ findings }: { findings: Finding[] }) {
       byDoc.get(label)!.add(o.fieldLabel);
     }
   }
+  // Documents that were read but took part in no passed check yet.
+  const quiet = docs.filter((d) => d.status !== "failed" && d.status !== "processing" && !byDoc.has(DOC_TYPES[d.typeId].short));
+  if (!findings.length) return <Empty text="Nothing has passed yet — add your documents and check again." />;
   return (
     <div className="space-y-3">
       {Array.from(byDoc.entries()).map(([doc, fields]) => (
-        <div key={doc} className="rounded-2xl border border-line bg-surface px-5 py-4">
-          <p className="flex items-center gap-2 font-medium">
-            <CheckCircle2 className="size-4 text-pass" /> {doc}
+        <div key={doc} className="gov-panel px-5 py-4">
+          <p className="flex items-center gap-2 font-semibold">
+            <CheckCircle2 className="size-4 text-pass" /> {doc} <span className="text-[13px] font-normal text-ink-3">— passed</span>
           </p>
           <ul className="mt-2 flex flex-wrap gap-1.5">
             {Array.from(fields).map((fl) => (
-              <li key={fl} className="rounded-full bg-pass-soft px-2.5 py-0.5 text-[13px] text-pass">{fl}</li>
+              <li key={fl} className="bg-pass-soft px-2.5 py-0.5 text-[13px] text-pass">{fl} ✓</li>
             ))}
           </ul>
         </div>
       ))}
+      {quiet.map((d) => (
+        <div key={d.id} className="gov-panel px-5 py-4 text-[14px] text-ink-2">
+          <span className="font-semibold text-ink">{DOC_TYPES[d.typeId].short}</span> was read ({d.fields.length} details) but no comparison passed on it yet — see the other sections.
+        </div>
+      ))}
       {general.length > 0 && (
-        <div className="rounded-2xl border border-line bg-surface px-5 py-4">
-          <p className="font-medium">Other checks</p>
+        <div className="gov-panel px-5 py-4">
+          <p className="font-semibold">Other checks that passed</p>
           <ul className="mt-2 space-y-1.5 text-[14px] text-ink-2">
             {general.map((f) => (
               <li key={f.key} className="flex gap-2">
@@ -251,15 +246,55 @@ function PassedByDocument({ findings }: { findings: Finding[] }) {
   );
 }
 
-// ---------------------------------------------------------------------------- confirm on the portal
+// ---------------------------------------------------------------------------- 4. external verifications (knowledge)
+
+function VerificationList({ items }: { items: Verification[] }) {
+  const resolutions = useSession((s) => s.session?.resolutions);
+  const setResolution = useSession((s) => s.setResolution);
+  const done = items.filter((v) => resolutions?.[`verify:${v.id}`]?.state === "acknowledged").length;
+  return (
+    <div className="space-y-3">
+      <p className="text-[13px] text-ink-3">{done} of {items.length} done. These portals verify your details against the issuer&rsquo;s own records — RejectLess cannot do that for you.</p>
+      {items.map((v, i) => {
+        const key = `verify:${v.id}`;
+        const on = resolutions?.[key]?.state === "acknowledged";
+        return (
+          <article key={v.id} className={clsx("gov-panel p-5", on && "opacity-70")}>
+            <div className="flex items-start gap-3">
+              <span className="flex size-8 shrink-0 items-center justify-center bg-accent text-[14px] font-bold text-white">{i + 1}</span>
+              <div className="min-w-0 flex-1">
+                <h3 className={clsx("text-[17px] font-bold leading-snug", on && "line-through decoration-line-strong")}>{v.title}</h3>
+                {v.titleHi && <p className="font-dev text-[13px] text-ink-3">{v.titleHi}</p>}
+                <dl className="mt-3 space-y-2 text-[14px]">
+                  <div className="flex gap-2"><dt className="w-24 shrink-0 font-semibold text-ink-3">Where</dt><dd><a href={v.portal.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-semibold text-accent underline underline-offset-2">{v.portal.label} <ExternalLink className="size-3.5" /></a></dd></div>
+                  <div className="flex gap-2"><dt className="w-24 shrink-0 font-semibold text-ink-3">Enter</dt><dd className="text-ink-2">{v.enter}</dd></div>
+                  <div className="flex gap-2"><dt className="w-24 shrink-0 font-semibold text-ink-3">You should see</dt><dd className="text-ink-2">{v.expect}</dd></div>
+                  <div className="flex gap-2"><dt className="w-24 shrink-0 font-semibold text-ink-3">Why</dt><dd className="text-ink-2">{v.why}</dd></div>
+                </dl>
+                {v.basis === "secondary" && <p className="mt-2 text-[12px] text-review">Portal or steps as commonly reported — confirm on the site.</p>}
+                <label className="mt-3 flex cursor-pointer items-center gap-2 text-[14px]">
+                  <input type="checkbox" checked={!!on} onChange={(e) => setResolution(key, e.target.checked ? "acknowledged" : "open", e.target.checked ? `You verified: ${v.title}` : "Unticked.")} className="size-5 accent-[var(--accent)]" />
+                  I checked this
+                </label>
+              </div>
+            </div>
+          </article>
+        );
+      })}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------- 5. confirm on the portal (engine "external" findings)
 
 function ExternalChecklist({ findings, portal }: { findings: Finding[]; portal?: string }) {
   const resolutions = useSession((s) => s.session?.resolutions);
   const setResolution = useSession((s) => s.setResolution);
   const items = findings.flatMap((f) => (f.signals.length ? f.signals : [f.summary]).map((text, i) => ({ key: `${f.key}#${i}`, text, title: f.title })));
   const done = items.filter((it) => resolutions?.[it.key]?.state === "acknowledged").length;
+  if (!items.length) return <Empty text="Nothing to confirm on the portal for this application." />;
   return (
-    <div className="rounded-2xl border border-line bg-surface px-5 py-4">
+    <div className="gov-panel px-5 py-4">
       <p className="text-[13px] text-ink-3">
         {done} of {items.length} confirmed by you. RejectLess cannot see these systems; ticking only records your own check.
       </p>
@@ -268,10 +303,10 @@ function ExternalChecklist({ findings, portal }: { findings: Finding[]; portal?:
           const on = resolutions?.[it.key]?.state === "acknowledged";
           return (
             <li key={it.key}>
-              <label className={clsx("flex cursor-pointer items-start gap-3 rounded-xl px-3 py-2.5 text-[15px] hover:bg-surface-2", on && "text-ink-3 line-through decoration-line-strong")}>
+              <label className={clsx("flex cursor-pointer items-start gap-3 px-3 py-2.5 text-[15px] hover:bg-surface-2", on && "text-ink-3 line-through decoration-line-strong")}>
                 <input
                   type="checkbox"
-                  checked={on}
+                  checked={!!on}
                   onChange={(e) => setResolution(it.key, e.target.checked ? "acknowledged" : "open", e.target.checked ? "You confirmed this on the official portal." : "Unticked.")}
                   className="mt-1 size-5 shrink-0 accent-[var(--accent)]"
                 />
@@ -282,7 +317,7 @@ function ExternalChecklist({ findings, portal }: { findings: Finding[]; portal?:
         })}
       </ul>
       {portal && (
-        <a href={portal} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-1 text-[14px] font-medium text-accent hover:underline">
+        <a href={portal} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-1 text-[14px] font-semibold text-accent underline underline-offset-2">
           Open the official portal to check <ExternalLink className="size-3.5" />
         </a>
       )}
@@ -290,68 +325,89 @@ function ExternalChecklist({ findings, portal }: { findings: Finding[]; portal?:
   );
 }
 
-// ---------------------------------------------------------------------------- documents or details needed
+// ---------------------------------------------------------------------------- 2. documents needed
 
 function NeededCard({ f, index }: { f: Finding; index: number }) {
+  const { session } = useActiveSession();
   const setGuideStep = useSession((s) => s.setGuideStep);
   const unskipDoc = useSession((s) => s.unskipDoc);
   const openAssistant = useUi((s) => s.openAssistant);
   const [dl, setDl] = useState(false);
   const [steps, setSteps] = useState(false);
-  const docType = missingDocType(f) as DocTypeId | undefined;
+  const input = useRef<HTMLInputElement>(null);
+  const missingType = missingDocType(f) as DocTypeId | undefined;
+  const quality = f.ruleId === "GEN-QUALITY";
+  const badDoc = quality ? session?.documents.find((d) => d.id === f.affectedDocIds[0]) : undefined;
+  const docType = missingType ?? badDoc?.typeId;
   const def = docType ? DOC_TYPES[docType] : undefined;
   const src = docType ? DOC_SOURCES[docType] : undefined;
+  const kind = quality ? "Re-upload needed" : def ? "Document needed" : "Detail needed";
+  const title = quality && def ? `A clearer copy of your ${def.short}` : def ? `Your ${def.short}` : `Your ${f.missingInput}`;
 
   return (
-    <li className="rise rounded-2xl border border-line bg-surface p-5" style={{ animationDelay: `${index * 60}ms` }}>
+    <li className="rise gov-panel p-5" style={{ animationDelay: `${index * 60}ms` }}>
       <div className="flex items-start gap-3">
         <FileSearch className="mt-1 size-5 shrink-0 text-external" />
         <div className="min-w-0 flex-1">
-          <p className="text-[12px] font-medium uppercase tracking-wide text-ink-3">{def ? "Document needed" : "Detail needed"}</p>
-          <h2 className="mt-0.5 text-[18px] font-semibold leading-snug">{def ? `Your ${def.short}` : `Your ${f.missingInput}`}</h2>
+          <p className="text-[12px] font-bold uppercase tracking-wide text-ink-3">{kind}</p>
+          <h2 className="mt-0.5 text-[18px] font-bold leading-snug">{title}</h2>
           <p className="mt-1.5 text-[15px] leading-relaxed text-ink-2">{f.summary}</p>
 
+          {quality && (
+            <div className="mt-3 bg-surface-2 px-4 py-3 text-[15px] leading-relaxed">
+              <p className="font-semibold">How to take a photo that reads well</p>
+              <ol className="mt-1 list-decimal space-y-0.5 pl-5 text-[14px] text-ink-2">
+                <li>Lay the document flat in daylight; no shadow of your hand or phone.</li>
+                <li>Keep all four edges inside the frame — don&rsquo;t cut the corners.</li>
+                <li>Hold still until the camera focuses; text should look sharp when you zoom in.</li>
+                <li>JPG, PNG or PDF up to 10 MB. The official digital PDF is always better than a photo.</li>
+              </ol>
+            </div>
+          )}
+
           {src && (
-            <div className="mt-3 rounded-xl bg-surface-2 px-4 py-3 text-[15px] leading-relaxed">
-              <p><span className="font-medium">Where to get it: </span>{src.where}</p>
+            <div className="mt-3 bg-surface-2 px-4 py-3 text-[15px] leading-relaxed">
+              <p><span className="font-semibold">Where to get it: </span>{src.where}</p>
               {src.link && (
-                <a href={src.link.url} target="_blank" rel="noreferrer" className="mt-1 inline-flex items-center gap-1 text-[14px] font-medium text-accent hover:underline">
+                <a href={src.link.url} target="_blank" rel="noreferrer" className="mt-1 inline-flex items-center gap-1 text-[14px] font-semibold text-accent underline underline-offset-2">
                   {src.link.label} <ExternalLink className="size-3.5" />
                 </a>
               )}
               <button onClick={() => setSteps(!steps)} className="mt-1 block text-[14px] text-ink-3 hover:text-ink" aria-expanded={steps}>
-                {steps ? "Hide steps" : "Show me the steps"}
+                {steps ? "Hide steps" : "What to fill in to get it"}
               </button>
               {steps && (
                 <ol className="rise mt-2 space-y-1 text-[14px] text-ink-2">
                   {src.steps.map((s, i) => (
-                    <li key={i} className="flex gap-2"><span className="font-medium text-ink">{i + 1}.</span> {s}</li>
+                    <li key={i} className="flex gap-2"><span className="font-semibold text-ink">{i + 1}.</span> {s}</li>
                   ))}
                 </ol>
               )}
             </div>
           )}
           {!def && (
-            <p className="mt-3 rounded-xl bg-surface-2 px-4 py-3 text-[15px] leading-relaxed">
-              <span className="font-medium">What to do: </span>
+            <p className="mt-3 bg-surface-2 px-4 py-3 text-[15px] leading-relaxed">
+              <span className="font-semibold">What to do: </span>
               {f.recommendation}
             </p>
           )}
 
           <div className="mt-4 flex flex-wrap gap-2">
+            {quality && badDoc && (
+              <>
+                <Button onClick={() => input.current?.click()} disabled={badDoc.status === "processing"}>
+                  {badDoc.status === "processing" ? <Spinner /> : <Upload className="size-4" />} Upload a clearer {def?.short}
+                </Button>
+                <input ref={input} type="file" accept={ACCEPTED.join(",")} className="hidden" onChange={(e) => { if (e.target.files?.length) addFiles(Array.from(e.target.files), { replaceId: badDoc.id }); e.target.value = ""; }} />
+              </>
+            )}
             {docType && src?.digilocker !== "no" && (
-              <Button onClick={() => setDl(true)}>
+              <Button variant={quality ? "secondary" : "primary"} onClick={() => setDl(true)}>
                 <CloudDownload className="size-4" /> Get from DigiLocker
               </Button>
             )}
-            {docType && (
-              <Button
-                variant={src?.digilocker !== "no" ? "secondary" : "primary"}
-                onClick={() => {
-                  unskipDoc(docType);
-                  setGuideStep("documents");
-                }}
-              >
+            {missingType && (
+              <Button variant={src?.digilocker !== "no" ? "secondary" : "primary"} onClick={() => { unskipDoc(missingType); setGuideStep("documents"); }}>
                 <Upload className="size-4" /> Upload it now
               </Button>
             )}
@@ -376,7 +432,7 @@ function NeededCard({ f, index }: { f: Finding; index: number }) {
   );
 }
 
-// ---------------------------------------------------------------------------- fix / check cards
+// ---------------------------------------------------------------------------- 3. needs review
 
 /** The most useful next action for a finding, in the user's terms. */
 function primaryAction(f: Finding) {
@@ -404,19 +460,46 @@ function IssueCard({ f, index }: { f: Finding; index: number }) {
   const act = primaryAction(f);
   const replacing = act?.kind === "replace" ? session?.documents.find((d) => d.id === act.docId) : undefined;
   const isAction = f.status === "action";
+  // Where each involved document can be corrected.
+  const involved = Array.from(new Set(f.affectedDocIds.map((id) => session?.documents.find((d) => d.id === id)?.typeId).filter(Boolean))) as DocTypeId[];
+  const fixes = involved.map((t) => ({ t, c: CORRECTIONS[t] })).filter((x) => x.c);
+  // "Aadhaar p.1 vs Bank passbook p.2": say exactly where each value was seen.
+  const where = f.observations.filter((o) => o.docId).map((o) => `${o.docLabel}${o.page ? ` (page ${o.page})` : ""}: ${o.value}`);
 
   return (
-    <li className="rise rounded-2xl border border-line bg-surface p-5" style={{ animationDelay: `${index * 60}ms` }}>
+    <li className="rise gov-panel p-5" style={{ animationDelay: `${index * 60}ms` }}>
       <div className="flex items-start gap-3">
         {isAction ? <TriangleAlert className="mt-1 size-5 shrink-0 text-action" /> : <CircleHelp className="mt-1 size-5 shrink-0 text-review" />}
         <div className="min-w-0 flex-1">
-          <p className="text-[12px] font-medium uppercase tracking-wide text-ink-3">{isAction ? "Needs fixing" : "Worth checking"}</p>
-          <h2 className="mt-0.5 text-[18px] font-semibold leading-snug">{f.title}</h2>
+          <p className="text-[12px] font-bold uppercase tracking-wide text-ink-3">{isAction ? "Mismatch — fix before applying" : "Worth checking"}</p>
+          <h2 className="mt-0.5 text-[18px] font-bold leading-snug">{f.title}</h2>
           <p className="mt-1.5 text-[15px] leading-relaxed text-ink-2">{f.summary}</p>
-          <p className="mt-3 rounded-xl bg-surface-2 px-4 py-3 text-[15px] leading-relaxed">
-            <span className="font-medium">What to do: </span>
+          {where.length > 1 && (
+            <ul className="mt-2 space-y-0.5 text-[14px] text-ink-2">
+              {where.map((w) => (
+                <li key={w} className="flex gap-2"><span className="mt-2 size-1.5 shrink-0 bg-action" />{w}</li>
+              ))}
+            </ul>
+          )}
+          <p className="mt-3 bg-surface-2 px-4 py-3 text-[15px] leading-relaxed">
+            <span className="font-semibold">What to do: </span>
             {f.recommendation}
           </p>
+          {fixes.length > 0 && (
+            <div className="mt-2 space-y-1.5 text-[14px]">
+              {fixes.map(({ t, c }) => (
+                <p key={t} className="text-ink-2">
+                  <span className="font-semibold text-ink">Fix it on your {DOC_TYPES[t].short}: </span>
+                  {c!.url ? (
+                    <a href={c!.url} target="_blank" rel="noreferrer" className="font-semibold text-accent underline underline-offset-2">{c!.label}</a>
+                  ) : (
+                    <span className="font-semibold">{c!.label}</span>
+                  )}
+                  {" — "}{c!.how}
+                </p>
+              ))}
+            </div>
+          )}
           {res?.state === "confirmed_correct" && <p className="mt-2 text-[13px] text-pass">You confirmed this is fine.</p>}
 
           <div className="mt-4 flex flex-wrap gap-2">
@@ -425,16 +508,7 @@ function IssueCard({ f, index }: { f: Finding; index: number }) {
                 <Button onClick={() => input.current?.click()} disabled={replacing?.status === "processing"}>
                   {replacing?.status === "processing" ? <Spinner /> : <Upload className="size-4" />} Upload corrected {act.label}
                 </Button>
-                <input
-                  ref={input}
-                  type="file"
-                  accept={ACCEPTED.join(",")}
-                  className="hidden"
-                  onChange={(e) => {
-                    if (e.target.files?.length) addFiles(Array.from(e.target.files), { replaceId: act.docId });
-                    e.target.value = "";
-                  }}
-                />
+                <input ref={input} type="file" accept={ACCEPTED.join(",")} className="hidden" onChange={(e) => { if (e.target.files?.length) addFiles(Array.from(e.target.files), { replaceId: act.docId }); e.target.value = ""; }} />
               </>
             )}
             {act?.kind === "details" && (

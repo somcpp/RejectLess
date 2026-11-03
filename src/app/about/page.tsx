@@ -10,7 +10,7 @@ export default function AboutPage() {
   return (
     <>
       <SiteHeader />
-      <main className="mx-auto w-full max-w-3xl space-y-14 px-4 py-12 text-[15px] leading-relaxed text-ink-2 sm:px-6">
+      <main id="main" className="mx-auto w-full max-w-3xl space-y-14 px-4 py-12 text-[15px] leading-relaxed text-ink-2 sm:px-6">
         <section>
           <Eyebrow>About</Eyebrow>
           <h1 className="mt-2 text-[32px] font-semibold tracking-tight text-ink">Know what is wrong before you submit.</h1>

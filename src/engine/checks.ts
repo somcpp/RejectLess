@@ -8,6 +8,7 @@ import {
 import { IFSC_SNAPSHOT, bankCodeKnown, lookupIfsc } from "./reference/ifsc";
 import { DOC_TYPES, FIELD_LABELS, SENSITIVE_FIELDS } from "@/knowledge/documents";
 import { nameTokens } from "./text/normalize";
+import { readability } from "./readability";
 
 export interface CheckContext {
   now: Date;
@@ -74,7 +75,8 @@ function finding(rule: RuleDef, d: Draft): Finding {
   };
 }
 
-const LOW_CONFIDENCE = 0.75;
+// Tesseract routinely reports 65–75% on correctly read phone photos; below this we ask the user to confirm.
+const LOW_CONFIDENCE = 0.65;
 
 function serviceMonths(ctx: CheckContext): { months: number; doj: ParsedDate; end: Date; endLabel: string; dojV: ProfileValue } | null {
   const dojV = firstValue(ctx.profile, "doj", ["epf_passbook"]);
@@ -256,15 +258,17 @@ const CHECKS: Record<string, CheckFn> = {
   doc_quality(rule, ctx) {
     const out: Finding[] = [];
     for (const doc of ctx.documents) {
-      const issues = doc.quality?.issues ?? [];
+      // Pixel metrics are a proxy; the real question is whether the key details could be read.
+      const { readWell, issues, notFound, unreadable } = readability(doc);
       if (!issues.length) continue;
-      const severe = issues.some((i) => ["blur", "no_text", "cropped", "low_resolution"].includes(i.code));
+      const severe = issues.some((i) => i.code === "no_text") || (!readWell && issues.some((i) => ["blur", "cropped", "low_resolution", "low_ocr_confidence"].includes(i.code)));
+      const lost = Array.from(new Set([...notFound, ...unreadable.map((f) => f.key)])).map((k) => FIELD_LABELS[k]);
       out.push(
         finding(rule, {
           subject: doc.id,
           status: severe ? "action" : "review",
           title: `${DOC_TYPES[doc.typeId].short}: hard to read`,
-          summary: issues.map((i) => i.message).join(" "),
+          summary: `${issues.map((i) => i.message).join(" ")}${lost.length ? ` Could not read clearly: ${lost.join(", ")}.` : ""}`,
           signals: issues.map((i) => `Page ${i.page}: ${i.message} (measured: ${i.measured})`),
           abstract: `Image quality issues on ${DOC_TYPES[doc.typeId].short}: ${issues.map((i) => i.code).join(", ")}.`,
           affectedDocIds: [doc.id],
@@ -290,14 +294,11 @@ const CHECKS: Record<string, CheckFn> = {
     for (const doc of ctx.documents) {
       if (doc.status === "failed" || doc.typeId === "unknown") continue;
       const def = DOC_TYPES[doc.typeId];
-      const missing = def.keyFields.filter((k) => !doc.fields.some((f) => f.key === k && f.value));
-      // An Aadhaar may show only the year of birth.
-      const filtered = missing.filter((k) => !(k === "dob" && doc.fields.some((f) => f.key === "yob")));
-      const low = doc.fields.filter((f) => f.confidence < LOW_CONFIDENCE && f.status === "extracted");
+      const { notFound: filtered, unreadable: low } = readability(doc);
       if (!filtered.length && !low.length) continue;
       const parts: string[] = [];
       if (filtered.length) parts.push(`Could not find: ${filtered.map((k) => FIELD_LABELS[k]).join(", ")}.`);
-      if (low.length) parts.push(`Read with low confidence: ${low.map((f) => FIELD_LABELS[f.key]).join(", ")}.`);
+      if (low.length) parts.push(`Hard to read, please check: ${low.map((f) => FIELD_LABELS[f.key]).join(", ")}.`);
       out.push(
         finding(rule, {
           subject: doc.id,
@@ -591,8 +592,9 @@ const CHECKS: Record<string, CheckFn> = {
   },
 
   own_account(rule, ctx) {
+    const who = (rule.params?.who as string) ?? "student";
     const holder = firstValue(ctx.profile, "account_holder", ["bank_passbook", "cancelled_cheque"]);
-    const student = firstValue(ctx.profile, "name", ["aadhaar", "marksheet_12"]);
+    const student = firstValue(ctx.profile, "name", ["aadhaar", "marksheet_12", "land_record", "pan"]);
     if (!holder || !student) return [];
     const cmp = compareNames(student.value, holder.value);
     const status: FindingStatus = cmp.outcome === "consistent" ? "passed" : cmp.outcome === "mismatch" ? "action" : "review";
@@ -601,14 +603,14 @@ const CHECKS: Record<string, CheckFn> = {
     return [
       finding(rule, {
         status,
-        title: status === "action" ? "Bank account not in the student's name" : undefined,
+        title: status === "action" ? `Bank account not in the ${who}'s name` : undefined,
         observations: [obs(student), obs(holder)],
         summary:
           status === "passed"
-            ? "The bank account is in the student's name."
+            ? `The bank account is in the ${who}'s name.`
             : status === "action"
-              ? `The account holder name does not match the student's name${isParent ? " — it appears to be a parent's account" : ""}.`
-              : "The account holder name is spelt differently from the student's name.",
+              ? `The account holder name does not match the ${who}'s name${isParent ? " — it appears to be a parent's account" : ""}.`
+              : `The account holder name is spelt differently from the ${who}'s name.`,
         signals: [...cmp.signals, ...(isParent ? ["The account holder name matches the father's / guardian's name."] : [])],
         abstract: `Account holder vs student: ${cmp.abstract}${isParent ? " Account holder matches the parent's name." : ""}`,
       }),
@@ -879,15 +881,121 @@ const CHECKS: Record<string, CheckFn> = {
   declaration(rule, ctx) {
     const key = rule.params?.key as string;
     const v = ctx.draft[key];
+    const p = rule.params as { disallowed?: string; unsure?: string; badText?: string; goodText?: string; unsureText?: string; badTitle?: string } | undefined;
     if (!v) {
       return [finding(rule, { status: "review", severity: "low", summary: "You have not answered this in your application details yet.", abstract: "Self-declaration not answered." })];
     }
-    const bad = v === rule.params?.disallowed;
+    if (p?.unsure && v === p.unsure) {
+      return [finding(rule, { status: "review", summary: p.unsureText ?? "You are not sure about this — check it on the official portal before applying.", abstract: "Self-declaration answered 'not sure'." })];
+    }
+    const bad = v === p?.disallowed;
     return [
       finding(rule, {
         status: bad ? "action" : "passed",
-        summary: bad ? "You said you receive another scholarship, which is reported to make you ineligible." : "You declared you are not receiving another scholarship.",
-        abstract: bad ? "User declared another scholarship." : "No other scholarship declared.",
+        title: bad ? p?.badTitle : undefined,
+        summary: bad ? (p?.badText ?? "You said you receive another scholarship, which is reported to make you ineligible.") : (p?.goodText ?? "You declared you are not receiving another scholarship."),
+        abstract: bad ? "User's declaration fails the condition." : "User's declaration meets the condition.",
+      }),
+    ];
+  },
+
+  /** Several yes/no exclusion questions; any "yes" fails. Used for PM-KISAN's exclusion list. */
+  declaration_any(rule, ctx) {
+    const items = (rule.params?.items as { key: string; label: string }[]) ?? [];
+    const disallowed = (rule.params?.disallowed as string) ?? "yes";
+    const answered = items.filter((i) => ctx.draft[i.key]);
+    if (!answered.length) {
+      return [finding(rule, { status: "review", severity: "low", summary: "You have not answered the exclusion questions in your application details yet.", abstract: "Exclusion declarations not answered." })];
+    }
+    const hits = answered.filter((i) => ctx.draft[i.key] === disallowed);
+    if (hits.length) {
+      return [
+        finding(rule, {
+          status: "action",
+          title: "You may fall under an exclusion",
+          summary: `You answered “yes” to: ${hits.map((h) => h.label).join("; ")}. Under the scheme's exclusion list, such families are not eligible.`,
+          signals: hits.map((h) => `Declared: ${h.label}`),
+          abstract: `${hits.length} exclusion criteria self-declared.`,
+        }),
+      ];
+    }
+    const left = items.length - answered.length;
+    return [
+      finding(rule, {
+        status: left ? "review" : "passed",
+        severity: "low",
+        summary: left ? `${answered.length} of ${items.length} exclusion questions answered “no”; ${left} still unanswered.` : "You declared that none of the exclusion criteria apply to your family.",
+        abstract: left ? "Exclusion declarations partly answered." : "No exclusion declared.",
+      }),
+    ];
+  },
+
+  /** Is a filing deadline still open? Dates come from the rule, never computed. */
+  deadline(rule, ctx) {
+    const p = rule.params as { due: string; belated?: string; label: string; lateNote?: string };
+    const due = new Date(p.due + "T23:59:59+05:30");
+    const belated = p.belated ? new Date(p.belated + "T23:59:59+05:30") : undefined;
+    const fmt = (d: Date) => d.toLocaleDateString("en-IN", { day: "2-digit", month: "long", year: "numeric", timeZone: "Asia/Kolkata" });
+    if (ctx.now <= due) {
+      const days = Math.ceil((due.getTime() - ctx.now.getTime()) / 86_400_000);
+      return [finding(rule, { status: "passed", summary: `${p.label} is ${fmt(due)} — ${days} day${days === 1 ? "" : "s"} left.`, abstract: "Deadline still open." })];
+    }
+    if (belated && ctx.now <= belated) {
+      return [
+        finding(rule, {
+          status: "review",
+          title: `${p.label} has passed`,
+          summary: `${p.label} was ${fmt(due)}. You can still file a belated return until ${fmt(belated)}. ${p.lateNote ?? ""}`.trim(),
+          abstract: "Original deadline passed; belated window open.",
+        }),
+      ];
+    }
+    return [
+      finding(rule, {
+        status: "action",
+        title: `${p.label} has passed`,
+        summary: `${p.label} was ${fmt(due)}${belated ? ` and the belated window closed on ${fmt(belated)}` : ""}. Check the portal for an updated return or the next year's cycle.`,
+        abstract: "Deadline and belated window both passed.",
+      }),
+    ];
+  },
+
+  /** Does ITR-1 (Sahaj) fit the user's declared income profile? Conditions from the rule params. */
+  itr_form(rule, ctx) {
+    const p = rule.params as { maxIncome: number; maxAgri: number; maxLtcg: number };
+    const d = ctx.draft;
+    const income = parseAmount(d.total_income);
+    if (!d.resident && income === null && !d.income_sources) {
+      return [finding(rule, { status: "review", severity: "low", summary: "Answer the income questions in your application details to see whether ITR-1 is the right form.", abstract: "ITR form questions unanswered." })];
+    }
+    const reasons: string[] = [];
+    if (d.resident === "no") reasons.push("you were not a resident of India for the year (ITR-1 is only for resident individuals)");
+    if (income !== null && income > p.maxIncome) reasons.push(`your total income of ${formatINR(income)} is above ${formatINR(p.maxIncome)}`);
+    if (d.income_sources === "business") reasons.push("you have business or professional income (use ITR-3 or ITR-4)");
+    if (d.income_sources === "capital_gains") reasons.push("you have capital gains other than small listed-equity gains (use ITR-2)");
+    if (d.income_sources === "foreign") reasons.push("you have foreign income or assets (use ITR-2)");
+    if (d.income_sources === "many_houses") reasons.push("you have income from more than two house properties (use ITR-2)");
+    const agri = parseAmount(d.agri_income);
+    if (agri !== null && agri > p.maxAgri) reasons.push(`your agricultural income of ${formatINR(agri)} is above ${formatINR(p.maxAgri)}`);
+    const ltcg = parseAmount(d.ltcg_112a);
+    if (ltcg !== null && ltcg > p.maxLtcg) reasons.push(`your long-term gains on listed shares/equity funds of ${formatINR(ltcg)} are above ${formatINR(p.maxLtcg)}`);
+    if (reasons.length) {
+      return [
+        finding(rule, {
+          status: "action",
+          title: "ITR-1 is not the right form for you",
+          summary: `Based on your answers, ${reasons.join("; ")}. Filing the wrong form makes the return defective.`,
+          signals: reasons,
+          abstract: `ITR-1 conditions failed: ${reasons.length}.`,
+        }),
+      ];
+    }
+    const unanswered = ["resident", "total_income", "income_sources"].filter((k) => !d[k]);
+    return [
+      finding(rule, {
+        status: unanswered.length ? "review" : "passed",
+        summary: unanswered.length ? `Nothing so far rules out ITR-1, but ${unanswered.length} question${unanswered.length > 1 ? "s are" : " is"} unanswered.` : "Your answers fit ITR-1 (Sahaj): resident, income up to the limit, salary / house property / other sources only.",
+        abstract: unanswered.length ? "ITR-1 fit partially checked." : "ITR-1 fit confirmed from declarations.",
       }),
     ];
   },

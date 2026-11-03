@@ -76,7 +76,22 @@ export const GOALS: Goal[] = [
     variantId: "fresh",
     roles: ["student", "helper"],
   },
-  { id: "pm-kisan", label: "Register for PM-KISAN", hint: "Income support for farmers", roles: ["self_employed", "helper"], comingSoon: true },
+  {
+    id: "pm-kisan",
+    label: "Register for PM-KISAN",
+    hint: "₹6,000 a year for landholding farmer families",
+    appId: "pm-kisan",
+    variantId: "registration",
+    roles: ["self_employed", "helper"],
+  },
+  {
+    id: "itr-1",
+    label: "File my income tax return (ITR-1)",
+    hint: "Salaried or pensioner, income up to ₹50 lakh",
+    appId: "income-tax-return",
+    variantId: "itr1",
+    roles: ["employee", "former_employee", "self_employed", "helper"],
+  },
   {
     id: "income-cert",
     label: "Get an income certificate",

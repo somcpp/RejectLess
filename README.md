@@ -6,10 +6,10 @@ RejectLess checks your documents and the details you plan to enter *before* you 
 
 Supported today:
 
-| Application | Claim types |
-|---|---|
-| EPF withdrawal & settlement (EPFO) | Final settlement (Form 19), Pension withdrawal (Form 10C), Partial withdrawal (Form 31) |
-| Central Sector Scholarship (NSP, PM-USP CSSS) | Fresh application |
+| Application                                   | Claim types                                                                             |
+| --------------------------------------------- | --------------------------------------------------------------------------------------- |
+| EPF withdrawal & settlement (EPFO)            | Final settlement (Form 19), Pension withdrawal (Form 10C), Partial withdrawal (Form 31) |
+| Central Sector Scholarship (NSP, PM-USP CSSS) | Fresh application                                                                       |
 
 ## Run it
 

@@ -13,7 +13,7 @@ export default function DiscoverPage() {
   return (
     <>
       <SiteHeader />
-      <main className="mx-auto w-full max-w-6xl px-4 py-12 sm:px-6">
+      <main id="main" className="mx-auto w-full max-w-6xl px-4 py-12 sm:px-6">
         <Eyebrow>Step 1 of 5 · Discover</Eyebrow>
         <h1 className="mt-2 text-[32px] font-semibold tracking-tight sm:text-[38px]">What are you trying to apply for?</h1>
         <p className="mt-3 max-w-2xl text-ink-2">

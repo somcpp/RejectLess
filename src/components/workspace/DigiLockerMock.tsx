@@ -116,7 +116,7 @@ export function DigiLockerMock({ docType, onClose }: { docType: DocTypeId; onClo
               <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                 <Button variant="ghost" onClick={onClose}>Close</Button>
                 {src?.link && (
-                  <a href={src.link.url} target="_blank" rel="noreferrer" className="inline-flex h-10 items-center justify-center gap-2 rounded-[10px] bg-accent px-4 text-sm font-medium text-white hover:bg-accent-hover">
+                  <a href={src.link.url} target="_blank" rel="noreferrer" className="inline-flex h-10 items-center justify-center gap-2 rounded-sm bg-accent px-4 text-sm font-medium text-white hover:bg-accent-hover">
                     Open {src.link.label} <ExternalLink className="size-3.5" />
                   </a>
                 )}

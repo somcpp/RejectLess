@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowRight, Check, Eye, Pencil } from "lucide-react";
+import clsx from "clsx";
+import { ArrowRight, Check, Eye, EyeOff, FileText, Pencil } from "lucide-react";
 import type { DocumentRecord, ExtractedField, FieldKey } from "@/engine/types";
 import { compareNames } from "@/engine/identity/nameMatch";
+import { UNREADABLE } from "@/engine/readability";
 import { digitsOnly, formatDate, maskIdentifier, parseDate } from "@/engine/validators";
 import { Button } from "@/components/ui";
 import { EvidenceViewer } from "@/components/workspace/EvidenceViewer";
@@ -15,11 +17,7 @@ import { DOC_TYPES, FIELD_LABELS, SENSITIVE_FIELDS } from "@/knowledge/documents
 const NAMES: FieldKey[] = ["name", "account_holder", "father_name"];
 const COMPARED: FieldKey[] = ["name", "account_holder", "father_name", "dob", "account_number", "ifsc"];
 
-interface Item {
-  doc: DocumentRecord;
-  field: ExtractedField;
-  reason: "unclear" | "differs";
-}
+type Reason = "unclear" | "differs";
 
 function norm(key: FieldKey, v: string) {
   if (key === "dob") {
@@ -39,17 +37,10 @@ export function display(key: FieldKey, v: string) {
   return v;
 }
 
-/** Values worth a second look: read with low confidence, or different from the same detail elsewhere. */
-function itemsToConfirm(docs: DocumentRecord[]): Item[] {
+/** Values worth a second look: read below the readability threshold, or different from the same detail elsewhere. */
+function reasons(docs: DocumentRecord[]): Map<string, Reason> {
+  const out = new Map<string, Reason>();
   const ready = docs.filter((d) => d.status === "analysed" || d.status === "needs_attention");
-  const out: Item[] = [];
-  const seen = new Set<string>();
-  const push = (doc: DocumentRecord, field: ExtractedField, reason: Item["reason"]) => {
-    const k = `${doc.id}:${field.key}`;
-    if (seen.has(k) || field.status !== "extracted" || field.minimised) return;
-    seen.add(k);
-    out.push({ doc, field, reason });
-  };
   for (const key of COMPARED) {
     const group = ready.flatMap((d) =>
       d.fields.filter((f) => (NAMES.includes(key) && key !== "father_name" ? f.key === "name" || f.key === "account_holder" : f.key === key)).map((f) => ({ d, f })),
@@ -59,108 +50,147 @@ function itemsToConfirm(docs: DocumentRecord[]): Item[] {
     for (const g of rest) {
       const same = NAMES.includes(key) ? compareNames(first.f.value, g.f.value).outcome === "consistent" : norm(key, first.f.value) === norm(key, g.f.value);
       if (!same) {
-        push(first.d, first.f, "differs");
-        push(g.d, g.f, "differs");
+        out.set(`${first.d.id}:${first.f.key}`, "differs");
+        out.set(`${g.d.id}:${g.f.key}`, "differs");
       }
     }
   }
-  for (const d of ready) for (const f of d.fields) if (f.confidence < 0.8) push(d, f, "unclear");
+  for (const d of ready) for (const f of d.fields) if (f.status === "extracted" && f.confidence < UNREADABLE && !out.has(`${d.id}:${f.key}`)) out.set(`${d.id}:${f.key}`, "unclear");
   return out;
 }
 
 export function ConfirmStep() {
   const { session } = useActiveSession();
   const setGuideStep = useSession((s) => s.setGuideStep);
-  const [initial] = useState(() => (session ? itemsToConfirm(session.documents) : []));
   if (!session) return null;
-  // Keep the list stable while the user works through it; read live values from the session.
-  const live = (it: Item) => session.documents.find((d) => d.id === it.doc.id)?.fields.find((f) => f.key === it.field.key) ?? it.field;
-  const remaining = initial.filter((it) => live(it).status === "extracted").length;
-
-  const name = session.documents.flatMap((d) => d.fields).find((f) => f.key === "name");
-  const docs = session.documents.filter((d) => d.status !== "failed");
+  const docs = session.documents.filter((d) => d.status === "analysed" || d.status === "needs_attention");
+  const why = reasons(docs);
+  const total = docs.reduce((s, d) => s + d.fields.length, 0);
+  const flagged = Array.from(why.keys()).filter((k) => {
+    const [id, key] = k.split(":");
+    return docs.find((d) => d.id === id)?.fields.find((f) => f.key === key)?.status === "extracted";
+  }).length;
 
   return (
     <div>
-      {initial.length ? (
-        <StepTitle
-          title={`Check ${initial.length} detail${initial.length > 1 ? "s" : ""} we read`}
-          sub="We only want to know if we read your documents correctly. If documents disagree with each other, we'll explain that in your results."
-        />
-      ) : (
-        <StepTitle title="Everything was read clearly" sub={`We read ${docs.reduce((s, d) => s + d.fields.length, 0)} details from ${docs.length} documents${name ? `, starting with your name: ${name.value}` : ""}.`} />
-      )}
+      <StepTitle
+        title={flagged ? `Check ${flagged} detail${flagged > 1 ? "s" : ""} we read` : "Check what we read"}
+        sub={`We read ${total} details from ${docs.length} document${docs.length === 1 ? "" : "s"}. ${flagged ? "Items marked need a look; the rest are shown so you can see them." : "Open a document to see where each detail came from, and fix anything we misread."} If documents disagree with each other, we explain that in your results.`}
+      />
 
-      <ul className="space-y-3">
-        {initial.map((it) => (
-          <ConfirmCard key={`${it.doc.id}:${it.field.key}`} item={it} field={live(it)} />
+      <div className="space-y-4">
+        {docs.map((d) => (
+          <DocCard key={`${d.id}:${d.version}`} doc={d} why={why} />
         ))}
-      </ul>
+        {!docs.length && <p className="border border-dashed border-line px-5 py-6 text-center text-ink-3">No documents were read yet.</p>}
+      </div>
 
       <ActionBar>
+        <Button size="lg" variant="ghost" onClick={() => setGuideStep("documents")}>Back</Button>
         <Button size="lg" onClick={() => setGuideStep("details")}>
-          {remaining ? "Skip and continue" : "Continue"} <ArrowRight className="size-4" />
+          Continue <ArrowRight className="size-4" />
         </Button>
       </ActionBar>
     </div>
   );
 }
 
-function ConfirmCard({ item, field }: { item: Item; field: ExtractedField }) {
+function DocCard({ doc, why }: { doc: DocumentRecord; why: Map<string, Reason> }) {
+  const [show, setShow] = useState(false);
+  const [active, setActive] = useState<FieldKey>();
+  const def = DOC_TYPES[doc.typeId];
+  const page = doc.fields.find((f) => f.key === active)?.page ?? 1;
+  // Flagged rows first, then the document's natural order.
+  const rows = [...doc.fields].sort((a, b) => Number(!!why.get(`${doc.id}:${b.key}`)) - Number(!!why.get(`${doc.id}:${a.key}`)));
+  const highlights = doc.fields
+    .filter((f) => f.bbox && f.page === page)
+    .map((f) => ({ bbox: f.bbox!, label: FIELD_LABELS[f.key], active: f.key === active, tone: why.get(`${doc.id}:${f.key}`) ? ("review" as const) : ("accent" as const) }));
+
+  return (
+    <section className="gov-panel">
+      <header className="flex flex-wrap items-center gap-3 border-b border-line px-4 py-3 sm:px-5">
+        <span className="flex size-9 items-center justify-center bg-accent-soft text-accent"><FileText className="size-5" /></span>
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold">{def.label}</p>
+          <p className="truncate text-[12px] text-ink-3">{doc.fileName} · {doc.fields.length} details read{doc.textMethod === "ocr" ? " from the photo" : " from the PDF"}</p>
+        </div>
+        <Button size="sm" variant="secondary" onClick={() => setShow(!show)} aria-expanded={show}>
+          {show ? <EyeOff className="size-4" /> : <Eye className="size-4" />} {show ? "Hide document" : "Show document"}
+        </Button>
+      </header>
+      {show && (
+        <div className="border-b border-line bg-surface-2 p-3">
+          <EvidenceViewer docId={doc.id} page={page} version={doc.version} highlights={highlights} className="max-h-[480px] overflow-auto" />
+          <p className="mt-2 text-[12px] text-ink-3">Tap a detail below to highlight where it was read. Preview is stored only in this browser.</p>
+        </div>
+      )}
+      <ul className="divide-y divide-line">
+        {rows.map((f) => (
+          <FieldRow key={f.key} doc={doc} field={f} reason={why.get(`${doc.id}:${f.key}`)} active={active === f.key} onShow={() => { setActive(f.key); setShow(true); }} />
+        ))}
+        {!doc.fields.length && <li className="px-5 py-4 text-[14px] text-ink-3">Nothing could be read from this file. Try a clearer copy on the Documents step.</li>}
+      </ul>
+    </section>
+  );
+}
+
+function FieldRow({ doc, field, reason, active, onShow }: { doc: DocumentRecord; field: ExtractedField; reason?: Reason; active: boolean; onShow: () => void }) {
   const confirmField = useSession((s) => s.confirmField);
   const editField = useSession((s) => s.editField);
   const [editing, setEditing] = useState(false);
-  const [show, setShow] = useState(false);
   const [value, setValue] = useState(field.value);
   const done = field.status !== "extracted";
-  const docLabel = DOC_TYPES[item.doc.typeId].short;
+  const minimised = !!field.minimised;
 
   return (
-    <li className={`rounded-2xl border bg-surface p-5 transition-colors ${done ? "border-pass/30" : "border-line"}`}>
-      <p className="text-[13px] text-ink-3">
-        {FIELD_LABELS[field.key]} on your {docLabel}
-        {item.reason === "differs" && !done && <span className="ml-2 rounded-full bg-review-soft px-2 py-0.5 text-[12px] text-review">differs from another document</span>}
-        {item.reason === "unclear" && !done && <span className="ml-2 rounded-full bg-black/[0.05] px-2 py-0.5 text-[12px] text-ink-2">hard to read</span>}
-      </p>
-      {editing ? (
-        <form
-          className="mt-2 flex gap-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            editField(item.doc.id, field.key, value.trim());
-            setEditing(false);
-          }}
-        >
-          <input autoFocus value={value} onChange={(e) => setValue(e.target.value)} className="h-11 min-w-0 flex-1 rounded-xl border border-line-strong px-3 text-[16px]" aria-label={`Correct ${FIELD_LABELS[field.key]}`} />
-          <Button type="submit">Save</Button>
-        </form>
-      ) : (
-        <p className="mt-1 break-words text-[20px] font-medium">{display(field.key, field.value)}</p>
-      )}
-      {done ? (
-        <p className="mt-3 flex items-center gap-1.5 text-[14px] text-pass">
-          <Check className="size-4" /> {field.status === "edited" ? "Corrected" : "Confirmed"}
-        </p>
-      ) : (
-        !editing && (
-          <div className="mt-4 flex flex-wrap gap-2">
-            <Button variant="secondary" onClick={() => confirmField(item.doc.id, field.key)}>
-              <Check className="size-4" /> That&rsquo;s what it says
-            </Button>
-            <Button variant="ghost" onClick={() => (setValue(field.value), setEditing(true))}>
-              <Pencil className="size-4" /> Fix it
-            </Button>
+    <li className={clsx("px-4 py-3 sm:px-5", active && "bg-accent-soft/40", reason && !done && "border-l-4 border-l-review")}>
+      <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
+        <div className="min-w-0 flex-1">
+          <p className="flex flex-wrap items-center gap-2 text-[12px] text-ink-3">
+            {FIELD_LABELS[field.key]}
+            {reason === "differs" && !done && <span className="bg-review-soft px-2 py-0.5 text-[11px] font-semibold text-review">differs from another document</span>}
+            {reason === "unclear" && !done && <span className="bg-review-soft px-2 py-0.5 text-[11px] font-semibold text-review">hard to read — check</span>}
+            {field.status === "edited" && <span className="bg-external-soft px-2 py-0.5 text-[11px] font-semibold text-external">corrected by you</span>}
+            {field.status === "confirmed" && <span className="bg-pass-soft px-2 py-0.5 text-[11px] font-semibold text-pass">confirmed</span>}
+          </p>
+          {editing ? (
+            <form
+              className="mt-1.5 flex gap-2"
+              onSubmit={(e) => {
+                e.preventDefault();
+                editField(doc.id, field.key, value.trim());
+                setEditing(false);
+              }}
+            >
+              <input autoFocus value={value} onChange={(e) => setValue(e.target.value)} className="h-10 min-w-0 flex-1 border border-line-strong px-3 text-[15px]" aria-label={`Correct ${FIELD_LABELS[field.key]}`} />
+              <Button type="submit" size="sm">Save</Button>
+              <Button type="button" size="sm" variant="ghost" onClick={() => setEditing(false)}>Cancel</Button>
+            </form>
+          ) : (
+            <p className="mt-0.5 break-words text-[17px] font-semibold">{display(field.key, field.value)}</p>
+          )}
+          {minimised && <p className="text-[12px] text-ink-3">Only the last 4 digits are kept.</p>}
+        </div>
+        {!editing && (
+          <div className="flex shrink-0 flex-wrap gap-1.5">
             {field.bbox && (
-              <Button variant="ghost" onClick={() => setShow(!show)}>
-                <Eye className="size-4" /> {show ? "Hide" : "Show on document"}
+              <Button size="sm" variant="ghost" onClick={onShow} title="Show on document">
+                <Eye className="size-4" /> <span className="hidden sm:inline">Show</span>
+              </Button>
+            )}
+            {!minimised && field.status === "extracted" && (
+              <Button size="sm" variant="secondary" onClick={() => confirmField(doc.id, field.key)}>
+                <Check className="size-4" /> That&rsquo;s right
+              </Button>
+            )}
+            {!minimised && (
+              <Button size="sm" variant="ghost" onClick={() => (setValue(field.value), setEditing(true))}>
+                <Pencil className="size-4" /> Fix
               </Button>
             )}
           </div>
-        )
-      )}
-      {show && field.bbox && (
-        <EvidenceViewer docId={item.doc.id} page={field.page} version={item.doc.version} highlights={[{ bbox: field.bbox, label: FIELD_LABELS[field.key], active: true }]} className="mt-4 max-h-80 overflow-auto" />
-      )}
+        )}
+      </div>
     </li>
   );
 }

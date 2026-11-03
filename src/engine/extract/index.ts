@@ -129,6 +129,40 @@ function withValue(h: Hit | undefined, value: string | undefined): Hit | undefin
   return h && value ? { ...h, value } : undefined;
 }
 
+const TOTAL_LABEL = /(?:grand\s*total|total(?:\s*marks)?(?:\s*obtained)?|कुल\s*योग|योग|कुल\s*प्राप्तांक|महायोग)/i;
+const MAX_LABEL = /(?:maximum\s*marks|max\.?\s*marks|full\s*marks|out\s*of|पूर्णांक|अधिकतम\s*अंक)/i;
+
+/** Percentage from a totals row: "Total 365 / 500", or a total line plus a maximum-marks line. */
+function totalsPercentage(lines: TextLine[]): Hit | undefined {
+  const pick = (obt: number, max: number, line: TextLine): Hit | undefined => {
+    if (!(max >= 100 && obt >= 0 && obt <= max)) return undefined;
+    const value = String(Math.round((obt / max) * 10000) / 100);
+    return { value, raw: line.text, line, bbox: line.bbox, certainty: 0.85 };
+  };
+  // Same line: "कुल योग 365 / 500", "Total 365 out of 500", or OCR'd columns "Total 500 365" / "Total 365 500".
+  for (const line of lines) {
+    const m =
+      line.text.match(new RegExp(TOTAL_LABEL.source + String.raw`\D{0,25}?(\d{2,4})\s*(?:\/|out of|में से)\s*(\d{3,4})`, "i")) ??
+      line.text.match(new RegExp(TOTAL_LABEL.source + String.raw`\D{0,25}?(\d{2,4})\s+(\d{2,4})\b`, "i"));
+    if (m) {
+      const [a, b] = [Number(m[1]), Number(m[2])];
+      // Columns may come in either order; the maximum is the larger, round figure.
+      const hit = pick(Math.min(a, b), Math.max(a, b), line);
+      if (hit) return hit;
+    }
+  }
+  // Separate lines: the last "Total …" number and any "Maximum marks …" number.
+  let total: { n: number; line: TextLine } | undefined;
+  let max: number | undefined;
+  for (const line of lines) {
+    const t = line.text.match(new RegExp(TOTAL_LABEL.source + String.raw`\D{0,25}?(\d{2,4})(?!\s*[\/%])`, "i"));
+    if (t && !MAX_LABEL.test(line.text)) total = { n: Number(t[1]), line };
+    const x = line.text.match(new RegExp(MAX_LABEL.source + String.raw`\D{0,25}?(\d{3,4})`, "i"));
+    if (x) max = Number(x[1]);
+  }
+  return total && max ? pick(total.n, max, total.line) : undefined;
+}
+
 const PARSERS: Partial<Record<DocTypeId, (lines: TextLine[]) => Out>> = {
   aadhaar(lines) {
     const out: Out = {};
@@ -214,22 +248,82 @@ const PARSERS: Partial<Record<DocTypeId, (lines: TextLine[]) => Out>> = {
 
   marksheet_12(lines) {
     const out: Out = {};
-    const name = labelValue(lines, [/name of (the )?candidate|candidate'?s name|student name/i]);
+    // Real marksheets vary a lot (CBSE, state boards, OCR'd photos), so labels are matched loosely.
+    const name =
+      labelValue(lines, [/name of (the )?candidate|candidate'?s name|student'?s? name|नाम/i]) ??
+      labelValue(lines, [/^\s*name\b(?!\s*of\s*(father|mother|school|institution))/i]);
     out.name = withValue(name, cleanName(name?.value));
-    const father = labelValue(lines, [/father'?s name/i]);
+    const father = labelValue(lines, [/father'?s? name|name of (the )?father|पिता/i]);
     out.father_name = withValue(father, cleanName(father?.value));
-    const dob = labelValue(lines, [/date of birth/i]);
+    const dob = labelValue(lines, [/date of birth|d\.?o\.?b\b|जन्म/i]);
     out.dob = withValue(dob, cleanDate(dob?.value));
-    const roll = labelValue(lines, [/roll no\.?|roll number/i]);
+    const roll = labelValue(lines, [/roll\s*(no\.?|number|code)?|अनुक्रमांक/i]);
     out.roll_number = withValue(roll, roll?.value.match(/[A-Z0-9]{5,}/i)?.[0]);
-    const board = lines.find((l) => /board of|council of/i.test(l.text));
+    const board = lines.find((l) => /board of|council of|board\b.*\b(education|examination)/i.test(l.text));
     if (board) out.board = { value: board.text.trim(), raw: board.text, line: board, bbox: board.bbox, certainty: 0.85 };
-    const year = labelValue(lines, [/year of (examination|passing)|examination year/i]);
+    const year = labelValue(lines, [/year of (examination|passing)|examination year|exam(ination)? (held in|year)/i]);
     out.year_of_passing = withValue(year, year?.value.match(/(19|20)\d{2}/)?.[0]);
-    const pct = labelValue(lines, [/percentage|aggregate/i]);
-    out.percentage = withValue(pct, pct?.value.match(/\d{1,3}(\.\d{1,2})?/)?.[0]?.concat("%"));
+    // 1. A printed percentage line. 2. Boards like UP / Bihar print totals instead ("कुल योग 365 / 500",
+    // or "Total 365" with "Maximum marks 500"): compute it. 3. Only then any "nn.nn %" on the sheet.
+    const labelled = labelValue(lines, [/percentage|aggregate|percent|प्रतिशत/i]);
+    const labelledNum = labelled?.value.match(/\d{1,3}(\.\d{1,2})?/)?.[0];
+    let pct = labelled && labelledNum && Number(labelledNum) <= 100 ? labelled : undefined;
+    if (!pct) pct = totalsPercentage(lines);
+    if (!pct) pct = regexHit(lines, /\b(\d{2,3}(?:\.\d{1,2})?)\s?%/, 1);
+    // A passed Class XII candidate scores at least the 33% pass mark; anything lower is a misread
+    // (attendance, a column value, a grade band) and is better reported as "not found".
+    const num = pct?.value.match(/\d{1,3}(\.\d{1,2})?/)?.[0];
+    out.percentage = num && Number(num) >= 33 && Number(num) <= 100 ? withValue(pct, num.concat("%")) : undefined;
     const stream = labelValue(lines, [/^stream/i]);
     out.stream = withValue(stream, stream?.value);
+    return out;
+  },
+
+  form16(lines) {
+    const out: Out = {};
+    const PAN = /\b[A-Z]{5}\d{4}[A-Z]\b/g;
+    const name = labelValue(lines, [/name and address of the employee(\s*\/\s*specified senior citizen)?/i, /name of (the )?employee/i, /employee'?s name/i]);
+    out.name = withValue(name, cleanName(name?.value.split(/,|\s{2,}/)[0]));
+    // Part A prints "PAN of the Deductor | TAN of the Deductor | PAN of the Employee" as one header
+    // with the three values on the next line, so the employee's PAN is the last PAN on that line.
+    const panHit = labelValue(lines, [/pan of (the )?employee/i]);
+    const pans = panHit?.value.toUpperCase().match(PAN) ?? [];
+    const employeePan = pans.length > 1 ? pans.at(-1) : pans[0];
+    out.pan_number = withValue(panHit, employeePan);
+    // The TAN label sits mid-header, so the value is on the same line or the one below.
+    const TAN = /\b[A-Z]{4}\d{5}[A-Z]\b/;
+    const tanIdx = lines.findIndex((l) => /tan of (the )?(deductor|employer)/i.test(l.text));
+    const tanLine = tanIdx >= 0 ? [lines[tanIdx], lines[tanIdx + 1]].find((l) => l && TAN.test(l.text.toUpperCase())) : undefined;
+    const tanVal = tanLine?.text.toUpperCase().match(TAN)?.[0];
+    out.tan = tanLine && tanVal ? { value: tanVal, raw: tanVal, line: tanLine, bbox: tanLine.bbox, certainty: 0.9 } : undefined;
+    const employer = labelValue(lines, [/name and address of the (employer|deductor)(\s*\/\s*specified bank)?/i, /employer'?s name/i, /name of (the )?(employer|deductor)/i]);
+    out.employer = withValue(employer, employer?.value.split(/,|\s{2,}/)[0].trim());
+    const ay = labelValue(lines, [/assessment year/i]);
+    const ayM = ay?.value.match(/(20\d{2})\s*-\s*(\d{2,4})/);
+    out.assessment_year = withValue(ay, ayM ? `${ayM[1]}-${ayM[2].slice(-2)}` : undefined);
+    const gross = labelValue(lines, [/gross salary/i, /total amount of salary/i]);
+    out.gross_salary = withValue(gross, cleanAmount(gross?.value));
+    const tds = labelValue(lines, [/total (amount of )?tax deducted/i, /tax deducted and deposited/i, /total tds/i, /net tax payable/i]);
+    out.tds_amount = withValue(tds, cleanAmount(tds?.value));
+    return out;
+  },
+
+  land_record(lines) {
+    const out: Out = {};
+    // Khatauni / jamabandi / 7-12 / pahani: layouts differ by state and are mostly in the state language.
+    const stop = /\s{2,}|\s*[|]\s*|पिता|पति|father|husband|s\/o|w\/o/i;
+    const name = labelValue(lines, [/खातेदार का नाम|भूमिधर का नाम|काश्तकार का नाम|खाताधारक|भूस्वामी/, /name of (the )?(holder|owner|khatedar|pattadar|cultivator|occupant)|(owner|holder|khatedar|pattadar)'?s? name/i], { stopAt: stop });
+    out.name = withValue(name, cleanName(name?.value));
+    const father = labelValue(lines, [/पिता(\s*\/\s*पति)? का नाम|पिता|पति/, /father'?s? name|s\/o|son of|w\/o/i], { stopAt: /\s{2,}|\s*[|]\s*/ });
+    out.father_name = withValue(father, cleanName(father?.value));
+    const khata = labelValue(lines, [/खाता\s*(संख्या|सं\.?|नं\.?|क्रमांक|न\.)/, /\bkhata\s*(no\.?|number)?/i, /\baccount\s*no\.?/i, /खाता(?!दार)/], { stopAt: /\s{2,}/ });
+    out.khata_number = withValue(khata, khata?.value.match(/[0-9]{1,8}[A-Za-z]?/)?.[0]);
+    const survey = labelValue(lines, [/(खसरा|गाटा|सर्वे)\s*(संख्या|सं\.?|नं\.?|न\.)?/, /\b(khasra|survey|gat|plot)\s*(no\.?|number)?/i], { stopAt: /\s{2,}/ });
+    out.survey_number = withValue(survey, survey?.value.match(/[0-9]+(\s*\/\s*[0-9]+)?[A-Za-z]?/)?.[0]?.replace(/\s/g, ""));
+    const area = labelValue(lines, [/क्षेत्रफल|रकबा/, /\b(area|extent)\b/i], { stopAt: /\s{2,}/ });
+    out.land_area = withValue(area, area?.value.trim());
+    const village = labelValue(lines, [/ग्राम|गाँव|गांव|मौजा/, /\b(village|mouza|gram)\b/i], { stopAt: /\s{2,}|,|तहसील|tehsil|taluk/i });
+    out.village = withValue(village, village?.value.trim());
     return out;
   },
 

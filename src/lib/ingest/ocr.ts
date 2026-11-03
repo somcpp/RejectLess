@@ -52,7 +52,9 @@ export async function ocrCanvas(canvas: HTMLCanvasElement, page: number): Promis
       }
     }
   }
-  const confidence = lines.length ? lines.reduce((s, l) => s + l.confidence, 0) / lines.length : 0;
+  // Weighted by text length: stray one-character "lines" (logos, rules, noise) would otherwise drag the average down.
+  const weight = lines.reduce((s, l) => s + l.text.length, 0);
+  const confidence = weight ? lines.reduce((s, l) => s + l.confidence * l.text.length, 0) / weight : 0;
   return { lines, confidence };
 }
 

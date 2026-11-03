@@ -6,6 +6,7 @@ import { del, get, set, clear, keys, createStore } from "idb-keyval";
 import type { DocTypeId, DocumentRecord, ExtractedField, FieldKey, FindingResolution, ResolutionState, TextLine, ValidationRun } from "@/engine/types";
 import { reconcile } from "@/engine/run";
 import type { UserProfile } from "@/knowledge/onboarding";
+import { applyDemoOverrides, hasDemoOverrides } from "@/lib/demoOverrides";
 
 export type GuideStep = "documents" | "confirm" | "details" | "check" | "results";
 
@@ -240,6 +241,10 @@ export const useSession = create<State>()(
         // Expired sessions are removed on load.
         if (state.session && new Date(state.session.expiresAt).getTime() < Date.now()) {
           void state.deleteSession();
+        } else if (state.session && hasDemoOverrides) {
+          // Demo overrides also apply to documents read before the override was set.
+          const documents = state.session.documents.map((d) => ({ ...d, fields: applyDemoOverrides(d.typeId, d.fields) }));
+          useSession.setState({ session: { ...state.session, documents } });
         }
         useSession.setState({ hydrated: true });
       },

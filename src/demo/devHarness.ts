@@ -51,5 +51,31 @@ export function installHarness() {
       return (await processFile(f, undefined, () => {})).lines.map((l) => `${Math.round(l.confidence * 100)} ${l.text}`);
     },
     evaluateCustom: (o: BuilderOptions) => evaluate(buildScenario(o)),
+    /** Renders any document type as a phone photo and reports OCR confidence, quality and fields. */
+    photoOf: async (type: string, personaId: string, degrade?: { blur?: number; dark?: number; crop?: number }) => {
+      const s = await import("./scenarios");
+      const { PERSONAS } = await import("./personas");
+      const p = PERSONAS[personaId];
+      const builders: Record<string, () => ReturnType<typeof s.aadhaarDoc>> = {
+        aadhaar: () => s.aadhaarDoc(p, {}, "photo"),
+        pan: () => ({ ...s.panDoc(p), format: "photo", fileName: "pan.jpg" }),
+        bank_passbook: () => s.passbookDoc(p, {}, "photo", degrade),
+        cancelled_cheque: () => s.chequeDoc(p),
+        epf_passbook: () => ({ ...s.epfDoc(p), format: "photo", fileName: "epf.jpg" }),
+        marksheet_12: () => ({ ...s.marksheetDoc(p), format: "photo", fileName: "marks.jpg" }),
+        income_certificate: () => ({ ...s.incomeDoc(p), format: "photo", fileName: "income.jpg" }),
+        bonafide_certificate: () => ({ ...s.bonafideDoc(p), format: "photo", fileName: "bonafide.jpg" }),
+      };
+      const spec = { ...builders[type](), degrade: degrade ?? builders[type]().degrade };
+      const r = await processFile(await specToFile(spec), undefined, () => {});
+      return {
+        type: r.record.typeId,
+        ocrConfidence: r.record.ocrConfidence,
+        quality: r.record.quality,
+        fields: r.record.fields.map((f) => `${f.key}=${f.value}(${Math.round(f.confidence * 100)})`),
+        missing: r.record.missingFields,
+        lines: r.lines.map((l) => `${Math.round(l.confidence * 100)} ${l.text}`),
+      };
+    },
   };
 }

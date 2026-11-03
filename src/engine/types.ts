@@ -9,6 +9,8 @@ export type DocTypeId =
   | "marksheet_12"
   | "income_certificate"
   | "bonafide_certificate"
+  | "form16"
+  | "land_record"
   | "unknown";
 
 /** Canonical attribute keys shared across documents and the application draft. */
@@ -44,7 +46,18 @@ export type FieldKey =
   | "course"
   | "course_year"
   | "study_mode"
-  | "academic_year";
+  | "academic_year"
+  // Form 16 (TDS certificate)
+  | "tan"
+  | "employer"
+  | "assessment_year"
+  | "gross_salary"
+  | "tds_amount"
+  // Land record (khatauni / RoR / 7-12 / pahani)
+  | "khata_number"
+  | "survey_number"
+  | "land_area"
+  | "village";
 
 export interface BBox {
   /** Normalised 0..1 coordinates relative to the page. */
@@ -190,6 +203,8 @@ export interface DraftFieldDef {
   /** Maps the draft field onto a canonical attribute for cross-checking. */
   maps?: FieldKey;
   sensitive?: boolean;
+  /** Heading shown above the first field of each group (mirrors the portal's tabs). */
+  section?: string;
 }
 
 export interface ApplicationVariant {

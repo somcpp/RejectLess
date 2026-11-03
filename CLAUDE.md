@@ -45,7 +45,9 @@ src/
     checks.ts        CHECKS registry: rule.check → implementation producing Findings
     run.ts           staged runner (STAGES), sorting, reconcile() for resolution history
   knowledge/         sources.ts, documents.ts (doc types, field labels), rules.ts, applications.ts,
-                     authorities.ts (ministry/department/portal/helpline per app; DOC_SOURCES = where to get each document)
+                     authorities.ts (ministry/department/portal/helpline per app; DOC_SOURCES = where to get each document),
+                     ministries.ts (54 Union ministries + per-state department template + state portals),
+                     schemes.ts (browseable catalogue; only entries with appId are checkable — the rest are "Coming soon")
   lib/
     ingest/          pdf.ts (pdf.js), ocr.ts (Tesseract eng+hin), raster.ts, pipeline.ts
     store/session.ts Zustand + IndexedDB persistence, 24 h sliding expiry, deleteSession()
@@ -65,9 +67,19 @@ src/
                      /workspace   GUIDED flow (session.guideStep): documents → confirm → details → check → results
                      /workspace/documents|review|profile|findings|check|report   "All details" views for power users
                      /apply, /apply/[appId], /demo, /privacy, /about, /api/assistant (only server code; calls Groq)
-  components/        ui.tsx (design primitives), site.tsx, flow.tsx (onboarding StepFrame/Choice),
-                     guide/* (guided steps), workspace/* (shell, assistant, findings, evidence)
+  components/        ui.tsx (design primitives), site.tsx (TopBar+Masthead+NavBar header, portal footer),
+                     flow.tsx (onboarding StepFrame/Choice), guide/* (guided steps), workspace/* (shell, assistant, findings, evidence)
 ```
+
+### Visual language: Indian government portal
+
+The UI deliberately looks like an NIC-built government portal (GIGW / UX4G conventions) so first-time applicants feel at home — while saying everywhere that RejectLess is independent. Keep to it:
+
+- **Chrome on every page**: `TopBar` (skip link, tricolour + bilingual line, screen-reader link, A-/A/A+) → white `Masthead` with the bilingual logo → navy `NavBar` with a saffron CTA. Pages wrap content in `<main id="main">` (the skip-link target). Footer lists website policies and "Last updated".
+- **Colours**: navy `accent` for headings/nav/primary buttons, `saffron` for the single "go" action, left borders and panel accents, `india-green`/`pass` for success. Red/amber/green/blue stay reserved for validation states.
+- **Shapes**: square corners. Radius tokens are overridden in `globals.css` (`--radius-2xl: 6px` etc.), so keep using `rounded-*` utilities; never add big literal radii. Use `.gov-panel` + `.gov-panel-head` (or `<Panel>`) for boxed sections with a header strip.
+- **Type**: Noto Sans + Noto Sans Devanagari; bold navy headings with a saffron left bar (`Question`, `StepTitle`, `Eyebrow`); labels bilingual where cheap (English · हिंदी).
+- **Never** use the State Emblem, Digital India / Swachh Bharat logos, or ministry branding — the look is borrowed, the identity is not.
 
 ### UX principles (keep the guided flow simple)
 
@@ -84,7 +96,7 @@ src/
 
 ## Gotchas we already hit (read before debugging)
 
-- **Next.js 16.4 with Cache Components** — read `node_modules/next/dist/docs/` first. Workspace pages are client-only, so `app/workspace/layout.tsx` sets `export const instant = false`. Server `GET` route handlers are prerendered unless they call `await connection()`.
+- **Next.js 16.4 with Cache Components** — read `node_modules/next/dist/docs/` first. Every client-only page (`/workspace/*`, `/start`, `/forms/*`, `/demo`, `/privacy`) is a thin **server** `page.tsx` that `export const instant = false` and renders a client component (`components/guide/GuidePage`, `components/StartFlow`, `components/forms/NspForm`, `components/pages/*`). New client pages must follow the same pattern. `instant` cannot be exported from a `"use client"` module (500 error), and a layout's `instant` does not cover its page (dev shows "Could not validate … Dropped segment"). Server `GET` route handlers are prerendered unless they call `await connection()`.
 - **No `requestAnimationFrame` in processing code.** It pauses in background tabs and froze document processing. pdf.js renders with `intent: "print"` for this reason; the check page yields with `setTimeout`.
 - **Zustand selectors must return stable values** — `useSession(s => s.session?.x.filter(...))` causes an infinite render loop. Select the raw value, derive outside.
 - **Tesseract runs in PSM 11 (sparse text).** Auto mode dropped large isolated text like the masked Aadhaar number.
@@ -95,9 +107,13 @@ src/
 - jsPDF fonts are Latin-1 only; `report.ts` transliterates Devanagari and replaces symbols.
 - `btn()` already sets `inline-flex`; for responsive hiding wrap it (`<span className="hidden sm:block">`) instead of adding `hidden`.
 
+## Rule audit
+
+`docs/RULE_AUDIT.md` lists, for every rule of the four working applications (EPFO, NSP CSSS, PM-KISAN, ITR-1), the instrument, source, exact condition, exceptions, whether it changed, and the boundary test. When you touch a rule: update the row, keep `basis` honest (`secondary` until the official text is read), and add/adjust a boundary test in `src/engine/checks.test.ts`.
+
 ## Testing
 
-- `npm test` covers name matching, transliteration, Hindi repair, validators and extraction.
+- `npm test` covers name matching, transliteration, Hindi repair, validators, extraction (incl. Form 16 and land records) and rule boundary conditions.
 - End-to-end in the browser (dev only): open `/demo`, then in the console
   `await window.__rl.evaluate("multiple")`, `await window.__rl.evaluate("multiple", true)` (with fixes applied), or
   `await window.__rl.evaluateCustom({ variantId: "nsp", defects: ["dob_swap"], photoDocs: true })`.
@@ -107,5 +123,5 @@ src/
 
 - TypeScript strict; match the surrounding style (small helpers, short comments explaining *why*).
 - UI copy: plain language for first-time applicants; never "approved/eligible for sure"; say what was checked and what wasn't.
-- Design tokens live in `app/globals.css`; red/amber/green/blue are reserved for validation states.
+- Design tokens live in `app/globals.css` (navy/saffron portal palette, square radii); red/amber/green/blue are reserved for validation states.
 - Commits: conventional style (`feat(engine): …`, `fix(ingest): …`). Keep `docs/PROGRESS.md` current.

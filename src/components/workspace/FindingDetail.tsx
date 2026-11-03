@@ -5,7 +5,7 @@ import Link from "next/link";
 import clsx from "clsx";
 import { ArrowLeft, BookOpen, Eye, History, MessageCircleQuestion, RefreshCw, Upload } from "lucide-react";
 import type { Finding, FindingResolution } from "@/engine/types";
-import { BasisTag, btn, Button, ConfidenceMeter, SeverityTag, StatusPill } from "@/components/ui";
+import { BasisTag, btn, Button, SeverityTag, StatusPill } from "@/components/ui";
 import { EvidenceViewer } from "./EvidenceViewer";
 import { getSource } from "@/knowledge/sources";
 import { getRule } from "@/knowledge/rules";
@@ -66,7 +66,6 @@ export function FindingDetail({ finding, resolution, onBack }: { finding: Findin
                 <tr>
                   <th className="px-3 py-2 font-medium">Source</th>
                   <th className="px-3 py-2 font-medium">Value</th>
-                  <th className="hidden px-3 py-2 font-medium sm:table-cell">Confidence</th>
                   <th className="px-3 py-2" />
                 </tr>
               </thead>
@@ -81,7 +80,6 @@ export function FindingDetail({ finding, resolution, onBack }: { finding: Findin
                       </p>
                     </td>
                     <td className="break-words px-3 py-2.5 align-top font-medium">{o.value}</td>
-                    <td className="hidden px-3 py-2.5 align-top sm:table-cell">{o.confidence !== undefined ? <ConfidenceMeter value={o.confidence} /> : "—"}</td>
                     <td className="px-3 py-2.5 text-right align-top">
                       {o.docId && o.bbox && !historical && (
                         <button className={btn("ghost", "sm", "px-2")} onClick={() => setEvidence(i)} aria-label={`Show evidence on ${o.docLabel}`}>
@@ -116,9 +114,6 @@ export function FindingDetail({ finding, resolution, onBack }: { finding: Findin
               </li>
             ))}
           </ol>
-          <p className="mt-2 flex items-center gap-2 text-[12px] text-ink-3">
-            Certainty of this result <ConfidenceMeter value={finding.confidence} />
-          </p>
         </section>
       )}
 

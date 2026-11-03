@@ -14,7 +14,7 @@ export interface GrayImage {
 }
 
 export interface QualityMetrics {
-  sharpness: number; // variance of Laplacian
+  sharpness: number; // variance of Laplacian, normalised to a contrast of 60
   brightness: number; // mean luminance
   contrast: number; // std-dev of luminance
   edgeInk: number; // share of dark pixels in the outer border band
@@ -61,8 +61,11 @@ export function measure(img: GrayImage): QualityMetrics {
       if (data[y * w + x] < dark) edgeDark++;
     }
   }
+  // Laplacian variance scales with contrast, so a merely dark or faded photo looked "blurred".
+  // Normalise to a reference contrast of 60 so sharpness measures focus, not exposure.
+  const normalised = contrast > 0 ? sharpness * (60 / contrast) ** 2 : sharpness;
   return {
-    sharpness: Math.round(sharpness),
+    sharpness: Math.round(normalised),
     brightness: Math.round(brightness),
     contrast: Math.round(contrast),
     edgeInk: Math.round((edgeDark / Math.max(1, edgeTotal)) * 1000) / 1000,
