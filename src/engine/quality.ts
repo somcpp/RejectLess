@@ -1,4 +1,5 @@
 import type { QualityIssue } from "./types";
+import { glareShare } from "./scan/geometry";
 
 // Image quality measurements on a grayscale buffer. Thresholds were calibrated on
 // clean renders vs. synthetically degraded renders and are deliberately conservative.
@@ -18,6 +19,7 @@ export interface QualityMetrics {
   brightness: number; // mean luminance
   contrast: number; // std-dev of luminance
   edgeInk: number; // share of dark pixels in the outer border band
+  glare: number; // share of saturated (≥251) pixels — specular reflections on paper
   minSide: number; // shortest side in source pixels
 }
 
@@ -69,6 +71,7 @@ export function measure(img: GrayImage): QualityMetrics {
     brightness: Math.round(brightness),
     contrast: Math.round(contrast),
     edgeInk: Math.round((edgeDark / Math.max(1, edgeTotal)) * 1000) / 1000,
+    glare: Math.round(glareShare(data) * 1000) / 1000,
     minSide: Math.min(img.sourceWidth, img.sourceHeight),
   };
 }
@@ -81,5 +84,7 @@ export function assess(m: QualityMetrics, page: number): QualityIssue[] {
   if (m.brightness > 245 && m.contrast < 20) issues.push({ code: "overexposed", page, message: "The image is washed out.", measured: `brightness ${m.brightness}/255` });
   else if (m.contrast < 25) issues.push({ code: "low_contrast", page, message: "The text has low contrast against the background.", measured: `contrast ${m.contrast}` });
   if (m.edgeInk > 0.06) issues.push({ code: "cropped", page, message: "Content touches the edge of the image — part of the document may be cut off.", measured: `${Math.round(m.edgeInk * 100)}% of the border has ink` });
+  // Scanned/printed paper rarely saturates; a bright patch of pure white is a reflection hiding text.
+  if (m.glare > 0.02 && m.brightness < 240) issues.push({ code: "glare", page, message: "The photo has glare — a bright reflection is hiding part of the page.", measured: `${Math.round(m.glare * 100)}% of pixels fully white` });
   return issues;
 }

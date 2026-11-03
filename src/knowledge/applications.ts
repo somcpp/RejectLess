@@ -187,6 +187,13 @@ export const APPLICATIONS: ApplicationDef[] = [
           "NSP-OWN-ACCOUNT", "GEN-ACCOUNT-CONSISTENCY", "GEN-IFSC-CONSISTENCY", "GEN-IFSC-FORMAT", "GEN-IFSC-REFERENCE",
           "NSP-INCOME", "NSP-INCOME-MATCH", "NSP-INCOME-RECENT", "NSP-REGULAR", "NSP-MARKS", "NSP-OTHER-SCHOLARSHIP", "NSP-EXTERNAL",
         ],
+        photoSpec: {
+          label: "Passport-size photograph",
+          width: 413,
+          height: 531,
+          maxKb: 50,
+          note: "Portals accept a small JPG; limits change, so check the current instruction on NSP before uploading.",
+        },
         // Mirrors the NSP form tab by tab, so the filled form can be built from these answers alone.
         draftFields: [
           { key: "scheme_category", label: "Scholarship category", type: "select", section: "Registration details", options: [{ value: "post_matric", label: "Post Matric" }, { value: "pre_matric", label: "Pre Matric" }, { value: "top_class", label: "Top Class / Merit" }] },

@@ -1,8 +1,15 @@
 # RejectLess — progress
 
-_Last updated: 2026-11-02. Update this file when you finish or start something; Claude reads it via CLAUDE.md._
+_Last updated: 2026-11-03. Update this file when you finish or start something; Claude reads it via CLAUDE.md._
 
-## Done (MVP)
+## Where things stand (2026-11-03)
+
+- **Applications checkable end to end**: EPFO (Form 19 / 10C / 31), NSP Central Sector Scholarship, PM-KISAN registration, ITR-1 (Sahaj). ~40 central and 12+ per-state schemes browsable under their ministry / state department, marked "Coming soon".
+- **Rules**: 46 versioned rules, each with sources, basis label and a row in `docs/RULE_AUDIT.md`; 10 document types (incl. Form 16, land record).
+- **Quality**: 117 unit tests (engine, extraction, rule boundaries, scanner geometry, triage, rejection decoder); 15 seeded demo scenarios + Scenario Builder with 18 defects; CDP scripts drive the demo headlessly for screenshots.
+- **Chrome**: government-portal visual language (GIGW/UX4G), bilingual labels, Listen, text size, accessibility statement.
+
+## Done (MVP, 2026-11-02 baseline)
 
 - **Applications**: EPFO final settlement (Form 19), pension withdrawal (Form 10C), partial withdrawal (Form 31); NSP Central Sector Scholarship (fresh). Others shown as "coming soon".
 - **Rules**: 34 versioned rules with sources and basis labels. EPF rules follow the EPF Scheme, 2026 (G.S.R. 525(E), 29 Jun 2026).
@@ -13,6 +20,9 @@ _Last updated: 2026-11-02. Update this file when you finish or start something; 
 - **Privacy**: local processing, 24 h sliding expiry, originals not kept, Privacy Centre with verified deletion.
 - **Demo**: 14 seeded scenarios with fix walkthroughs; Scenario Builder with 17 plantable defects; dev harness `window.__rl`.
 - **Quality**: 71 unit tests; all scenarios verified in browser.
+
+## Changes since the baseline (newest last)
+
 - **Guided UX (redesign)**: minimal landing page; onboarding at /start (who you are, work type, state, goal, "not sure" PF recommender, plan + consent); guided workspace (documents one at a time → confirm only unclear/differing values → details → check → plain-language results with one action per issue, evidence on demand, "Explain this"); floating Ask; detailed views kept under "All details". AI reasoning clicked through in the UI with Groq (grounded, cited).
 
 - **Clear results & help for first-time applicants (2026-11-02)**: results grouped into five tappable groups — Fix now, Documents needed, Check these, Confirm on portal, Passed (`lib/triage.ts`; engine statuses unchanged, "could not check" findings now carry `missingInput`). Passed shows which document and which details matched; Documents needed shows where to get each document (`knowledge/authorities.ts` → `DOC_SOURCES`) with a clearly-labelled **simulated DigiLocker** flow (adds a fictional specimen in demo sessions; otherwise explains the real download); Confirm-on-portal is a tickable checklist. Ministry/department, portal, helpline, fee and timeline per application (`AUTHORITIES`) shown on the goal and plan screens and in results. Government-portal visual cues (tricolour band, bilingual labels, A/A/A text size) without any emblem or claim to be official. Guided workspace now has Back, Home, numbered icon stages (tap a completed stage to return), and "Listen" (browser speech) on every step title.
@@ -40,7 +50,19 @@ _Last updated: 2026-11-02. Update this file when you finish or start something; 
 
 - **Confirm step shows everything read (2026-11-03)**: one card per document listing every extracted detail with ✓ "That's right" / Fix / Show, flagged rows (hard to read, differs from another document) first with a saffron edge, and a "Show document" preview that highlights where each tapped detail was read. Previously only flagged values were listed, so a clean scan showed nothing.
 
+- **Photo, scanner, finder, decoder (2026-11-03)**:
+  - *Passport photo step* (`guide/PhotoStep.tsx`, `lib/photo.ts`): take/choose → drag-zoom crop to the portal size → JPEG compressed under the limit → download; stored locally as `session.photo`; NSP variant declares `photoSpec`. The filled form marks the photograph "Ready".
+  - *Glare*: new `glare` quality metric (share of saturated pixels) and issue; demo degrade `glare`, builder defect, seeded scenario 15 "Glare on the Aadhaar photo". Confirm step shows advisories (issues dropped because the details were still read) with a Retake/replace button.
+  - *Smart document scanner* (`engine/scan/geometry.ts` pure + tests; `lib/scanner.ts`; `components/scanner/DocumentScanner.tsx`): live Otsu-threshold sheet detection with corner overlay, guidance (closer/back/dark/glare/hold still), auto-capture when steady, homography perspective correction, "document mode" enhancement (local-background normalisation), up to 4 pages → JPEG or one PDF via pdf-lib; "Scan with camera" on the Documents step and in the assistant; file fallback without a camera.
+  - *Scheme finder* (`knowledge/eligibility.ts`, `assistant/SchemeFinder.tsx`): deterministic screens for 8 schemes (CSSS, NMMSS, PM-KISAN, EPFO, ITR, APY, PM-SYM, e-Shram) → fits / needs info / doesn't apply, with each condition's basis and what's still missing; unresearched schemes are never offered as eligible. "Check my documents for this" starts a session.
+  - *Rejection decoder* (`knowledge/rejections.ts` 20 reasons, `lib/rejection.ts` + tests, `assistant/RejectionDecoder.tsx`): upload a notice (OCR on device) or paste text → matched reasons with English/Hindi meaning, evidence lines, the RejectLess rule, fix steps and verification links; no match → optional redacted question to the assistant.
+  - All three appear as *Tools* at the top of the assistant panel.
+
+- **Photo assessment; no more "confidence is low" (2026-11-03)**: the pipeline no longer emits the `low_ocr_confidence` issue (the OCR average stays as a metric; readability is judged per field). The passport photo is assessed after cropping (`assessPhoto`: glare measured on the central face area, exposure, focus) and the ready card says "The image has glare — …" with retake advice, or "Looks clear".
+
 ## Known gaps
+
+- [ ] Scanner tested on synthetic frames only; try on real phones (lighting, autofocus delays, rear-camera selection).
 
 - [ ] Demo renderer layouts for Form 16 and land records (so PM-KISAN / ITR demos can run end to end).
 - [ ] State departments are a template; real per-state structures and scheme pages not researched.
@@ -61,19 +83,26 @@ _Last updated: 2026-11-02. Update this file when you finish or start something; 
 
 ## Next phases
 
-1. **Demo readiness** — deploy (Vercel, set `GROQ_API_KEY`), test on a phone, Playwright tests for the demo path, rehearse README demo script.
-2. **Trust** — real IFSC dataset, confirm "Verify" rules, Devanagari font in report, accessibility pass.
-3. **Hindi-first** — Hindi UI, Hindi assistant answers, optional voice (Groq Whisper).
+1. **Demo readiness** — deploy (Vercel, set `GROQ_API_KEY`; do NOT set `NEXT_PUBLIC_DEMO_OVERRIDES` there), test the scanner and photo step on a phone, Playwright tests for the demo path (the CDP scripts in the scratchpad are a starting point), rehearse README demo script.
+2. **Trust** — real IFSC dataset, confirm "Verify" rules (EPF 2026 gazette, CSSS current-year PDF, CBDT due-date circulars), Devanagari font in report, accessibility pass.
+3. **Hindi-first** — Hindi UI, Hindi assistant answers (decoder already bilingual), optional voice (Groq Whisper).
 4. **Smarter AI** — embedding retrieval, Private mode (in-browser LLM via WebLLM; deferred by decision), opt-in vision model for messy scans.
-5. **More applications** — PM-KISAN, certificates, more scholarships, more EPFO claim types. Research-backed rules only.
+5. **More applications** — certificates (income/caste/domicile via state e-District), more scholarships (NMMSS, post-matric SC/ST/OBC), more EPFO claim types; demo renderers for Form 16 / land record. Research-backed rules only.
 6. **Assisted service** — CSC operator dashboard, multiple applicants, consent-based handover.
-7. **Integrations** (with authorisation) — DigiLocker, official verification APIs, rejection-notice reading.
+7. **Integrations** (with authorisation) — real DigiLocker (requester registration), official verification APIs; filled forms for EPFO / PM-KISAN / ITR like `/forms/nsp`.
 
 ## Decisions log
 
 - 2026-11-02 — AI provider: Groq (`openai/gpt-oss-120b`, fallback `llama-3.3-70b-versatile`). AI only explains; it never sees exact personal details.
 - 2026-11-02 — Private mode (in-browser LLM) deferred to a later phase.
 - 2026-11-02 — Scope: EPFO (3 claim types) + one scholarship pack, broad demo rather than many shallow applications.
+- 2026-11-02 — Look like an Indian government portal (GIGW/UX4G grammar) but never use the State Emblem, ministry logos or "Government of India" as our identity; every page says RejectLess is independent.
+- 2026-11-02 — Results are grouped for users by `lib/triage.ts`; engine statuses are never changed by the UI. "Could not check" and poor photos count as to-dos (Documents needed), not errors.
+- 2026-11-02 — Users never see confidence percentages; readability is judged per field (`engine/readability.ts`) and shown as a "hard to read — check" tag only.
+- 2026-11-03 — The filled NSP form (`/forms/nsp`) carries no "practice" wording but keeps one header line "prefilled by RejectLess" and a link to the official portal; no emblem; nothing is submitted. It is filled from the user's typed answers, with document values only as a labelled fallback.
+- 2026-11-03 — Per-machine demo overrides (`NEXT_PUBLIC_DEMO_OVERRIDES`, dev only, labelled in the UI) are allowed for rehearsals; the parser is never hardcoded for one person's document.
+- 2026-11-03 — Client-only pages are server `page.tsx` wrappers exporting `instant = false` (Next.js 16.4 Cache Components).
+- 2026-11-03 — Scheme finder screens only schemes with researched conditions; rejection decoder matches only known reasons; AI may explain but never adds eligibility or reasons.
 
 ## Who is working on what
 

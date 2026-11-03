@@ -7,7 +7,7 @@ import { DOC_TYPES } from "@/knowledge/documents";
 export const UNREADABLE = 0.65;
 
 // Issues that describe the picture, not the result. Dropped once the key details were read.
-const PROXY_ISSUES = new Set<QualityIssue["code"]>(["blur", "dark", "overexposed", "low_contrast", "low_resolution", "low_ocr_confidence", "cropped"]);
+const PROXY_ISSUES = new Set<QualityIssue["code"]>(["blur", "dark", "overexposed", "low_contrast", "low_resolution", "low_ocr_confidence", "cropped", "glare"]);
 
 export interface Readability {
   /** Document type is known and every key detail was read clearly (or confirmed/edited by the user). */
@@ -18,6 +18,8 @@ export interface Readability {
   unreadable: ExtractedField[];
   /** Quality issues still worth telling the user about. */
   issues: QualityIssue[];
+  /** Picture problems that did not stop reading — shown softly ("a clearer photo is safer"). */
+  advisories: QualityIssue[];
 }
 
 export function readability(doc: Pick<DocumentRecord, "typeId" | "fields" | "quality">): Readability {
@@ -29,5 +31,6 @@ export function readability(doc: Pick<DocumentRecord, "typeId" | "fields" | "qua
   const unreadable = doc.fields.filter((f) => f.status === "extracted" && f.confidence < UNREADABLE);
   const readWell = doc.typeId !== "unknown" && notFound.length === 0 && !keyUnclear;
   const all = doc.quality?.issues ?? [];
-  return { readWell, notFound, unreadable, issues: readWell ? all.filter((i) => !PROXY_ISSUES.has(i.code)) : all };
+  const issues = readWell ? all.filter((i) => !PROXY_ISSUES.has(i.code)) : all;
+  return { readWell, notFound, unreadable, issues, advisories: all.filter((i) => !issues.includes(i)) };
 }

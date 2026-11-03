@@ -90,7 +90,7 @@ export interface ExtractedField {
 }
 
 export interface QualityIssue {
-  code: "blur" | "dark" | "overexposed" | "low_contrast" | "low_resolution" | "cropped" | "low_ocr_confidence" | "no_text";
+  code: "blur" | "dark" | "overexposed" | "low_contrast" | "low_resolution" | "cropped" | "glare" | "low_ocr_confidence" | "no_text";
   message: string;
   page: number;
   measured: string;
@@ -217,6 +217,8 @@ export interface ApplicationVariant {
   documents: DocRequirement[];
   ruleIds: string[];
   draftFields: DraftFieldDef[];
+  /** A passport-style photo the portal asks for, with its upload limits. */
+  photoSpec?: { label: string; width: number; height: number; maxKb: number; note: string };
 }
 
 export interface ApplicationDef {

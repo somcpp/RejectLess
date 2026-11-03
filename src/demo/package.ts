@@ -56,6 +56,16 @@ async function toPhoto(canvas: HTMLCanvasElement, spec: DocSpec): Promise<Blob> 
   ctx.shadowBlur = 24;
   ctx.drawImage(canvas, -canvas.width / 2, -canvas.height / 2);
   ctx.restore();
+  if (g.glare) {
+    // A bright reflection from a window or tube light, as on a phone photo of glossy paper.
+    const cx = out.width * 0.62, cy = out.height * 0.3, r = Math.min(out.width, out.height) * 0.28 * g.glare;
+    const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+    glow.addColorStop(0, "rgba(255,255,255,1)");
+    glow.addColorStop(0.55, "rgba(255,255,255,0.95)");
+    glow.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, out.width, out.height);
+  }
   let final = out;
   if (g.crop) {
     // Cut off the left part of the document, as when a phone photo is framed badly.

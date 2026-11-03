@@ -2,7 +2,14 @@
 
 import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import clsx from "clsx";
-import { BookOpen, ChevronDown, Cpu, Send, ShieldCheck, Sparkles, X } from "lucide-react";
+import { ArrowLeft, BookOpen, ChevronDown, Cpu, FileSearch, ScanLine, Search, Send, ShieldCheck, Sparkles, X } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { SchemeFinder } from "@/components/assistant/SchemeFinder";
+import { RejectionDecoder } from "@/components/assistant/RejectionDecoder";
+import { DocumentScanner } from "@/components/scanner/DocumentScanner";
+import { addFiles } from "@/lib/actions";
+import { goalForVariant } from "@/knowledge/onboarding";
+import { redact } from "@/lib/assistant/assistant";
 import { Button, Spinner } from "@/components/ui";
 import { useActiveSession } from "@/lib/hooks";
 import { useUi } from "@/lib/store/ui";
@@ -42,7 +49,10 @@ export function AssistantPanel() {
   const [busy, setBusy] = useState(false);
   const [ai, setAi] = useState<{ enabled: boolean; model?: string }>({ enabled: false });
   const [askConsent, setAskConsent] = useState(false);
+  const [tool, setTool] = useState<"finder" | "decoder" | "scanner">();
   const listRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
+  const startSession = useSession((s) => s.startSession);
   const focus = latestRun?.findings.find((f) => f.key === assistantFindingKey);
   const aiOn = !!consent.ai && ai.enabled;
 
@@ -149,7 +159,41 @@ export function AssistantPanel() {
         </header>
 
         <div ref={listRef} className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
-          {msgs.length === 0 && (
+          {tool && tool !== "scanner" ? (
+            <div>
+              <button onClick={() => setTool(undefined)} className="mb-3 inline-flex items-center gap-1 text-[13px] font-semibold text-accent"><ArrowLeft className="size-4" /> Back to questions</button>
+              <p className="mb-3 text-[16px] font-bold text-accent">{tool === "finder" ? "Which schemes could I apply for?" : "Decode a rejection notice"}</p>
+              {tool === "finder" && (
+                <SchemeFinder
+                  onPick={(appId, variantId) => {
+                    if (session.appId === appId && session.variantId === variantId) { setTool(undefined); closeAssistant(); return; }
+                    if (!window.confirm("Start a new check for this scheme? The current one will be replaced in this browser.")) return;
+                    const goal = goalForVariant(appId, variantId);
+                    startSession(appId, variantId, undefined, { ...(session.profile ?? { role: "helper", state: "" }), goal: goal?.id ?? "" });
+                    closeAssistant();
+                    router.push("/workspace");
+                  }}
+                />
+              )}
+              {tool === "decoder" && <RejectionDecoder onAskAi={(q) => { setTool(undefined); void ask(redact(q, session).text); }} />}
+            </div>
+          ) : null}
+          {!tool && msgs.length === 0 && (
+            <div className="mb-4 grid gap-2">
+              <p className="text-[13px] text-ink-3">Tools</p>
+              {[
+                { id: "scanner" as const, Icon: ScanLine, title: "Scan a document", sub: "Camera scanner: finds the page, straightens it, cleans it up" },
+                { id: "finder" as const, Icon: Search, title: "Which schemes could I apply for?", sub: "A few questions → schemes RejectLess can screen you for" },
+                { id: "decoder" as const, Icon: FileSearch, title: "Decode a rejection notice", sub: "Upload the letter; get the reason and the fix in English / हिंदी" },
+              ].map((t) => (
+                <button key={t.id} onClick={() => setTool(t.id)} className="flex items-center gap-3 border border-line bg-surface px-3 py-2.5 text-left hover:border-accent">
+                  <span className="flex size-9 shrink-0 items-center justify-center bg-accent-soft text-accent"><t.Icon className="size-5" /></span>
+                  <span className="min-w-0"><span className="block text-[14px] font-semibold">{t.title}</span><span className="block text-[12px] text-ink-3">{t.sub}</span></span>
+                </button>
+              ))}
+            </div>
+          )}
+          {!tool && msgs.length === 0 && (
             <div className="space-y-2">
               <p className="text-[13px] text-ink-3">Try asking:</p>
               {suggestions.map((s) => (
@@ -159,7 +203,7 @@ export function AssistantPanel() {
               ))}
             </div>
           )}
-          {msgs.map((m, i) =>
+          {!tool && msgs.map((m, i) =>
             m.role === "user" ? (
               <div key={i} className="ml-10 rounded-2xl rounded-br-sm bg-ink px-4 py-2.5 text-[14px] text-white">
                 {m.text}
@@ -194,6 +238,17 @@ export function AssistantPanel() {
           </Button>
         </form>
       </aside>
+      {tool === "scanner" && (
+        <DocumentScanner
+          title="Scan a document"
+          onClose={() => setTool(undefined)}
+          onCapture={(files) => {
+            setTool(undefined);
+            addFiles(files);
+            setMsgs((m) => [...m, { role: "assistant", text: `Added ${files.length === 1 ? files[0].name : files.length + " pages"} to your documents. It is being read on your device — check the Documents step, then run the check again.`, answer: { text: "", citations: [], mode: "local", grounded: true } }]);
+          }}
+        />
+      )}
     </div>
   );
 }

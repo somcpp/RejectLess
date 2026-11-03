@@ -50,6 +50,8 @@ export interface Session {
   profile?: UserProfile;
   guideStep: GuideStep;
   skippedDocs: DocTypeId[];
+  /** Passport-style photo prepared for the portal (small JPEG data URL, kept locally). */
+  photo?: { dataUrl: string; bytes: number; width: number; height: number; at: string; issues?: string[] };
 }
 
 interface State {
@@ -58,6 +60,7 @@ interface State {
   hydrated: boolean;
   startSession: (appId: string, variantId: string, demoScenarioId?: string, profile?: UserProfile) => Session;
   setGuideStep: (step: GuideStep) => void;
+  setPhoto: (photo: Session["photo"]) => void;
   skipDoc: (t: DocTypeId) => void;
   unskipDoc: (t: DocTypeId) => void;
   setVariant: (variantId: string) => void;
@@ -123,6 +126,11 @@ export const useSession = create<State>()(
 
       setGuideStep(step) {
         mutate(setState, (s) => ({ ...s, guideStep: step }));
+      },
+
+      setPhoto(photo) {
+        mutate(setState, (s) => ({ ...s, photo }));
+        getState().log(photo ? "Passport photo prepared for the portal" : "Passport photo removed");
       },
 
       skipDoc(t) {

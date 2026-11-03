@@ -3,12 +3,14 @@
 import { useRef, useState } from "react";
 import Link from "next/link";
 import clsx from "clsx";
-import { ArrowRight, Check, CircleAlert, CloudDownload, ExternalLink, FileUp, Lightbulb, Lock } from "lucide-react";
+import { ArrowRight, Check, CircleAlert, CloudDownload, ExternalLink, FileUp, Lightbulb, Lock, ScanLine } from "lucide-react";
 import type { DocTypeId } from "@/engine/types";
 import { Button, Spinner } from "@/components/ui";
 import { DigiLockerMock } from "@/components/workspace/DigiLockerMock";
 import { DOC_SOURCES } from "@/knowledge/authorities";
 import { ActionBar, StepTitle } from "./common";
+import { PhotoStep } from "./PhotoStep";
+import { DocumentScanner } from "@/components/scanner/DocumentScanner";
 import { useActiveSession, useDocProgress } from "@/lib/hooks";
 import { addFiles } from "@/lib/actions";
 import { useSession } from "@/lib/store/session";
@@ -26,6 +28,7 @@ export function DocumentsStep() {
   const demoLoading = useUi((s) => s.demoLoading);
   const [dragging, setDragging] = useState(false);
   const [dl, setDl] = useState<DocTypeId>();
+  const [scanning, setScanning] = useState(false);
   if (!session || !variant) return null;
 
   const skipped = session.skippedDocs ?? [];
@@ -111,10 +114,15 @@ export function DocumentsStep() {
             <span className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-accent-soft text-accent">
               <FileUp className="size-6" />
             </span>
-            <Button size="lg" className="mt-5" onClick={() => input.current?.click()}>
-              Choose a photo or PDF
-            </Button>
-            <p className="mt-3 text-[13px] text-ink-3">or drag it here · JPG, PNG or PDF up to 10 MB</p>
+            <div className="mt-5 flex flex-wrap justify-center gap-2">
+              <Button size="lg" onClick={() => input.current?.click()}>
+                Choose a photo or PDF
+              </Button>
+              <Button size="lg" variant="secondary" onClick={() => setScanning(true)}>
+                <ScanLine className="size-4" /> Scan with camera
+              </Button>
+            </div>
+            <p className="mt-3 text-[13px] text-ink-3">or drag it here · JPG, PNG or PDF up to 10 MB · the scanner straightens and cleans the page for you</p>
             <input ref={input} type="file" accept={ACCEPTED.join(",")} className="hidden" onChange={(e) => (onFiles(e.target.files), (e.target.value = ""))} />
           </div>
           <p className="mt-4 flex items-start gap-2 text-[14px] text-ink-2">
@@ -142,6 +150,16 @@ export function DocumentsStep() {
             </div>
           )}
           {dl && <DigiLockerMock docType={dl} onClose={() => setDl(undefined)} />}
+          {scanning && (
+            <DocumentScanner
+              title={`Scan your ${DOC_TYPES[current.docType].short}`}
+              onClose={() => setScanning(false)}
+              onCapture={(files) => {
+                setScanning(false);
+                addFiles(files, { hintType: current.docType });
+              }}
+            />
+          )}
           {wrongSlot && (
             <p className="mt-3 rounded-xl bg-review-soft px-4 py-3 text-[14px] text-[#5f3a05]">
               That file looks like your {DOC_TYPES[wrongSlot.typeId].short}, so we added it as that.
@@ -158,6 +176,12 @@ export function DocumentsStep() {
             <p className="font-medium">Reading {pendingUnknown.fileName}</p>
             <p className="text-[14px] text-ink-3">{progress[pendingUnknown.id] ?? "Starting"} — on your device</p>
           </div>
+        </div>
+      )}
+
+      {!current && variant.photoSpec && (
+        <div className="mb-6">
+          <PhotoStep spec={variant.photoSpec} />
         </div>
       )}
 

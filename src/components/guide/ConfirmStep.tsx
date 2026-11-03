@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import clsx from "clsx";
-import { ArrowRight, Check, Eye, EyeOff, FileText, Pencil } from "lucide-react";
+import { ArrowRight, Check, Eye, EyeOff, FileText, Pencil, Sun, Upload } from "lucide-react";
 import type { DocumentRecord, ExtractedField, FieldKey } from "@/engine/types";
 import { compareNames } from "@/engine/identity/nameMatch";
-import { UNREADABLE } from "@/engine/readability";
+import { readability, UNREADABLE } from "@/engine/readability";
+import { addFiles } from "@/lib/actions";
+import { ACCEPTED } from "@/lib/ingest/pipeline";
 import { digitsOnly, formatDate, maskIdentifier, parseDate } from "@/engine/validators";
 import { Button } from "@/components/ui";
 import { EvidenceViewer } from "@/components/workspace/EvidenceViewer";
@@ -98,7 +100,11 @@ export function ConfirmStep() {
 function DocCard({ doc, why }: { doc: DocumentRecord; why: Map<string, Reason> }) {
   const [show, setShow] = useState(false);
   const [active, setActive] = useState<FieldKey>();
+  const replaceInput = useRef<HTMLInputElement>(null);
   const def = DOC_TYPES[doc.typeId];
+  // Real problems and soft advisories alike are shown here; the results page keeps only the real ones.
+  const r = readability(doc);
+  const advisories = [...r.issues, ...r.advisories];
   const page = doc.fields.find((f) => f.key === active)?.page ?? 1;
   // Flagged rows first, then the document's natural order.
   const rows = [...doc.fields].sort((a, b) => Number(!!why.get(`${doc.id}:${b.key}`)) - Number(!!why.get(`${doc.id}:${a.key}`)));
@@ -118,6 +124,18 @@ function DocCard({ doc, why }: { doc: DocumentRecord; why: Map<string, Reason> }
           {show ? <EyeOff className="size-4" /> : <Eye className="size-4" />} {show ? "Hide document" : "Show document"}
         </Button>
       </header>
+      {advisories.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 border-b border-review/30 bg-review-soft px-4 py-3 text-[14px] text-[#5f3a05] sm:px-5">
+          <Sun className="size-4 shrink-0 text-review" />
+          <p className="min-w-0 flex-1">
+            <span className="font-semibold">{advisories.map((a) => a.message.replace(/\.$/, "")).join("; ")}.</span> We could still read the details, but the official reviewer sees the same picture — make it clear.
+          </p>
+          <Button size="sm" variant="secondary" onClick={() => replaceInput.current?.click()} disabled={doc.status === "processing"}>
+            <Upload className="size-4" /> Retake / replace
+          </Button>
+          <input ref={replaceInput} type="file" accept={ACCEPTED.join(",")} className="hidden" onChange={(e) => { if (e.target.files?.length) addFiles(Array.from(e.target.files), { replaceId: doc.id }); e.target.value = ""; }} />
+        </div>
+      )}
       {show && (
         <div className="border-b border-line bg-surface-2 p-3">
           <EvidenceViewer docId={doc.id} page={page} version={doc.version} highlights={highlights} className="max-h-[480px] overflow-auto" />

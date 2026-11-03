@@ -59,6 +59,11 @@ src/
   knowledge/onboarding.ts  roles, work types, states, goals (→ app + variant), stateNote(), recommendPf()
   lib/useRunCheck.ts       shared staged check runner + inputSignature() (detects changes since a run)
   lib/triage.ts            groups findings into the 5 result groups shown to users (does not change engine statuses)
+  engine/scan/geometry.ts  pure scanner maths: Otsu sheet detection, homography, warp, enhancement, glare (tested)
+  lib/scanner.ts + components/scanner/DocumentScanner.tsx   camera scanner (setInterval, never rAF) → JPEG/PDF → addFiles
+  lib/photo.ts + guide/PhotoStep.tsx                        passport photo crop + compress (variant.photoSpec)
+  knowledge/eligibility.ts + assistant/SchemeFinder.tsx     deterministic scheme screens (only researched schemes)
+  knowledge/rejections.ts + lib/rejection.ts + assistant/RejectionDecoder.tsx   rejection-notice decoder (OCR on device)
   components/gov.tsx       GovBand (tricolour strip, text size), ReadAloud (speech), AuthorityCard
   components/workspace/DigiLockerMock.tsx  simulated DigiLocker fetch — always labelled as a simulation
   app/               Next.js routes:

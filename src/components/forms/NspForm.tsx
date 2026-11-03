@@ -237,12 +237,13 @@ export function NspFormPage() {
                     <p className="text-[14px] text-ink-2">Upload a PDF or JPG for each. Use the files you already checked, or the DigiLocker copies.</p>
                     <ul className="mt-4 divide-y divide-[#e3eaf4] border border-[#e3eaf4]">
                       {DOCS.map((d) => {
-                        const have = session.documents.some((x) => x.status !== "failed" && d.toLowerCase().includes(x.typeId === "marksheet_12" ? "marksheet" : x.typeId === "bank_passbook" ? "passbook" : x.typeId.replace("_", " ")));
+                        const have = d === "Photograph" ? !!session.photo : session.documents.some((x) => x.status !== "failed" && d.toLowerCase().includes(x.typeId === "marksheet_12" ? "marksheet" : x.typeId === "bank_passbook" ? "passbook" : x.typeId.replace("_", " ")));
                         return (
                           <li key={d} className="flex items-center gap-3 px-4 py-3 text-[14px]">
                             {have ? <Check className="size-4 text-pass" /> : <span className="size-4 border border-ink-3" />}
                             <span className="flex-1">{d}</span>
-                            <span className="text-[12px] text-ink-3">{have ? "Verified" : "Required"}</span>
+                            <span className="text-[12px] text-ink-3">{have ? (d === "Photograph" && session.photo ? `Ready · ${Math.round(session.photo.bytes / 1024)} KB` : "Verified") : "Required"}</span>
+                            {d === "Photograph" && session.photo && <a href={session.photo.dataUrl} download="passport-photo.jpg" className="text-[12px] font-semibold text-accent underline underline-offset-2">Download</a>}
                             <span className="border border-[#c9d6e8] px-2 py-1 text-[12px] text-ink-2">Choose file</span>
                           </li>
                         );

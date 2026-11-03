@@ -1,6 +1,6 @@
 "use client";
 
-import type { DocTypeId, DocumentRecord, QualityIssue, QualityReport, TextLine } from "@/engine/types";
+import type { DocTypeId, DocumentRecord, QualityReport, TextLine } from "@/engine/types";
 import { classify, extractFields } from "@/engine/extract";
 import { assess, measure } from "@/engine/quality";
 import { readability } from "@/engine/readability";
@@ -73,10 +73,9 @@ export async function processFile(file: File, forcedType: DocTypeId | undefined,
       if (i === 0) quality.metrics = { ...m };
       quality.issues.push(...assess(m, i + 1));
     });
-    if (ocrConfidence !== undefined && ocrConfidence < 0.7) {
-      quality.metrics.ocrConfidence = Math.round(ocrConfidence * 100);
-      quality.issues.push({ code: "low_ocr_confidence", page: 1, message: "Text recognition confidence is low.", measured: `${Math.round(ocrConfidence * 100)}% average` } satisfies QualityIssue);
-    }
+    // The OCR average is kept as a metric only; whether text was readable is judged per field
+    // (engine/readability.ts), so users never see a bare "confidence is low" message.
+    if (ocrConfidence !== undefined) quality.metrics.ocrConfidence = Math.round(ocrConfidence * 100);
   }
   const allLines = pages.flatMap((p) => p.lines);
   if (!allLines.length) {

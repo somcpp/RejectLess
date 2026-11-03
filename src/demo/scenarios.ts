@@ -5,6 +5,8 @@ export interface Degrade {
   blur?: number;
   dark?: number;
   crop?: number;
+  /** 0..1 — size of a white reflection painted over the page. */
+  glare?: number;
   rotate?: number;
 }
 
@@ -402,6 +404,20 @@ export const SCENARIOS: Scenario[] = [
     fixes: [],
   },
   {
+    id: "nsp-glare",
+    number: "15",
+    title: "Glare on the Aadhaar photo",
+    appId: "nsp-csss",
+    variantId: "fresh",
+    personaId: "priya",
+    story: "Priya photographed her Aadhaar under a tube light; a bright reflection covers part of the card.",
+    expected: "Details are still read, so nothing fails — the Confirm step shows a 'photo has glare' advisory with a retake button. Replacing the photo clears it.",
+    tags: ["Quality", "Photo"],
+    docs: [{ ...aadhaarDoc(P, {}, "photo"), degrade: { glare: 1 } }, marksheetDoc(P), incomeDoc(P), bonafideDoc(P), passbookDoc(P)],
+    draft: nspDraft(P),
+    fixes: [{ id: "retake-aadhaar", label: "Retake the Aadhaar photo", description: "Priya photographs the card again in even light.", replaces: "aadhaar", doc: aadhaarDoc(P, {}, "photo") }],
+  },
+  {
     id: "nsp-issues",
     number: "14",
     title: "Scholarship with a parent's account",
@@ -454,6 +470,7 @@ export const BUILDER_DEFECTS: { id: string; label: string; group: string; applie
   { id: "ifsc_merged", label: "Old IFSC from a merged bank", group: "Banking", applies: ["final-settlement", "pension-withdrawal", "partial-withdrawal", "nsp"] },
   { id: "blur", label: "Blurry passbook photo", group: "Quality", applies: ["final-settlement", "pension-withdrawal", "partial-withdrawal", "nsp"] },
   { id: "cropped", label: "Cropped passbook photo", group: "Quality", applies: ["final-settlement", "pension-withdrawal", "partial-withdrawal", "nsp"] },
+  { id: "glare", label: "Glare on the Aadhaar photo", group: "Quality", applies: ["final-settlement", "pension-withdrawal", "partial-withdrawal", "nsp"] },
   { id: "missing_bank", label: "Leave out the bank passbook", group: "Completeness", applies: ["final-settlement", "pension-withdrawal", "partial-withdrawal", "nsp"] },
   { id: "recent_exit", label: "Left the job only 5 months ago", group: "Eligibility", applies: ["final-settlement", "pension-withdrawal"] },
   { id: "no_pan", label: "No PAN available", group: "Eligibility", applies: ["final-settlement"] },
@@ -490,7 +507,7 @@ export function buildScenario(opts: BuilderOptions): Scenario {
 
   const photo = d.has("blur") || d.has("cropped") || opts.photoDocs;
   const degrade: Degrade | undefined = d.has("blur") ? { blur: 2.6, dark: 0.6 } : d.has("cropped") ? { crop: 0.18 } : undefined;
-  const docs: DocSpec[] = [aadhaarDoc(p, {}, opts.photoDocs ? "photo" : "pdf")];
+  const docs: DocSpec[] = [d.has("glare") ? { ...aadhaarDoc(p, {}, "photo"), degrade: { glare: 1 } } : aadhaarDoc(p, {}, opts.photoDocs ? "photo" : "pdf")];
   if (nsp) {
     docs.push(marksheetDoc(p, d.has("dob_swap") ? { dob: swapDob(p.dob) } : {}), incomeDoc(p), bonafideDoc(p));
   } else {
