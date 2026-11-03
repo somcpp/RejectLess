@@ -24,6 +24,11 @@ export function demoOverride(typeId: DocTypeId, key: FieldKey): string | undefin
   return OVERRIDES[`${typeId}.${key}`];
 }
 
+/** Non-document overrides, e.g. "photo.issues": "glare" forces the passport-photo glare advisory. */
+export function demoFlag(key: string): string | undefined {
+  return OVERRIDES[key];
+}
+
 /** Returns the fields with any pinned values applied (adds the field if it was not read at all). */
 export function applyDemoOverrides(typeId: DocTypeId, fields: ExtractedField[]): ExtractedField[] {
   if (!hasDemoOverrides) return fields;
