@@ -40,16 +40,42 @@ export function guidance(r: FrameReport | null): { text: string; ok: boolean } {
   return { text: "Good — hold still", ok: true };
 }
 
-/** Grabs the full-resolution frame, flattens the quad and (optionally) enhances it. */
-export function capturePage(video: HTMLVideoElement, quad: Quad | null, enhance: boolean): HTMLCanvasElement {
+/**
+ * Grabs a still — via the ImageCapture API where the browser has it (a true full-resolution
+ * photo with autofocus), otherwise the current video frame — then flattens the quad and
+ * (optionally) enhances it.
+ */
+export async function capturePage(video: HTMLVideoElement, quad: Quad | null, enhance: boolean): Promise<HTMLCanvasElement> {
   const full = document.createElement("canvas");
-  full.width = video.videoWidth;
-  full.height = video.videoHeight;
   const ctx = full.getContext("2d", { willReadFrequently: true })!;
-  ctx.drawImage(video, 0, 0);
+  const track = (video.srcObject as MediaStream | null)?.getVideoTracks()[0];
+  const IC = (window as unknown as { ImageCapture?: new (t: MediaStreamTrack) => { takePhoto(): Promise<Blob> } }).ImageCapture;
+  let drew = false;
+  if (track && IC) {
+    try {
+      const blob = await new IC(track).takePhoto();
+      const bmp = await createImageBitmap(blob);
+      full.width = bmp.width;
+      full.height = bmp.height;
+      ctx.drawImage(bmp, 0, 0);
+      bmp.close();
+      drew = true;
+    } catch {
+      /* fall back to the video frame below */
+    }
+  }
+  if (!drew) {
+    full.width = video.videoWidth;
+    full.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0);
+  }
   let out = full;
   if (quad) {
-    const { w, h } = outputSize(quad, full.width, full.height, 1800);
+    // Aim for ~2400 px on the long side so text is ~300 dpi for OCR; upscaling a small quad is still
+    // better than feeding OCR a 600 px strip.
+    const base = outputSize(quad, full.width, full.height, 2400);
+    const up = Math.max(1, Math.min(2.5, 1600 / Math.max(base.w, base.h)));
+    const w = Math.round(base.w * up), h = Math.round(base.h * up);
     const src = ctx.getImageData(0, 0, full.width, full.height).data;
     const warped = warpRgba(src, full.width, full.height, quad, w, h);
     out = document.createElement("canvas");

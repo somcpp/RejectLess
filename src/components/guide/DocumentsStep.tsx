@@ -29,6 +29,7 @@ export function DocumentsStep() {
   const [dragging, setDragging] = useState(false);
   const [dl, setDl] = useState<DocTypeId>();
   const [scanning, setScanning] = useState(false);
+  const [lastScan, setLastScan] = useState<{ url: string; name: string; kb: number }>();
   if (!session || !variant) return null;
 
   const skipped = session.skippedDocs ?? [];
@@ -156,6 +157,8 @@ export function DocumentsStep() {
               onClose={() => setScanning(false)}
               onCapture={(files) => {
                 setScanning(false);
+                if (lastScan) URL.revokeObjectURL(lastScan.url);
+                setLastScan({ url: URL.createObjectURL(files[0]), name: files[0].name, kb: Math.round(files[0].size / 1024) });
                 addFiles(files, { hintType: current.docType });
               }}
             />
@@ -200,6 +203,13 @@ export function DocumentsStep() {
             );
           })}
         </ul>
+      )}
+
+      {lastScan && (
+        <p className="mt-4 flex flex-wrap items-center gap-2 border border-pass/30 bg-pass-soft px-4 py-2.5 text-[14px] text-[#15553a]">
+          <Check className="size-4" /> Scan saved as {lastScan.name} ({lastScan.kb} KB) and being read.
+          <a href={lastScan.url} download={lastScan.name} className="ml-auto inline-flex items-center gap-1 font-semibold text-accent underline underline-offset-2">Download the scan</a>
+        </p>
       )}
 
       <p className="mt-6 flex items-center gap-1.5 text-[13px] text-ink-3">

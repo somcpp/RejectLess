@@ -5,7 +5,7 @@ import { classify, extractFields } from "@/engine/extract";
 import { assess, measure } from "@/engine/quality";
 import { readability } from "@/engine/readability";
 import { applyDemoOverrides } from "@/lib/demoOverrides";
-import { fileToCanvas, previewBlob, toGray } from "./raster";
+import { fileToCanvas, prepareForOcr, previewBlob, toGray } from "./raster";
 import { ocrCanvas } from "./ocr";
 import { readPdf } from "./pdf";
 
@@ -50,7 +50,7 @@ export async function processFile(file: File, forcedType: DocTypeId | undefined,
       method = "ocr";
       for (let i = 0; i < pdf.pages.length; i++) {
         progress(`Recognising text on page ${i + 1}`);
-        const r = await ocrCanvas(pdf.pages[i].canvas, i + 1);
+        const r = await ocrCanvas(prepareForOcr(pdf.pages[i].canvas), i + 1);
         pages.push({ canvas: pdf.pages[i].canvas, lines: r.lines });
         ocrConfidence = r.confidence;
       }
@@ -60,7 +60,8 @@ export async function processFile(file: File, forcedType: DocTypeId | undefined,
     progress("Loading image");
     const canvas = await fileToCanvas(file);
     progress("Recognising text (in your browser)");
-    const r = await ocrCanvas(canvas, 1);
+    // OCR runs on a cleaned, upscaled copy; quality metrics and the preview use the original.
+    const r = await ocrCanvas(prepareForOcr(canvas), 1);
     pages.push({ canvas, lines: r.lines });
     ocrConfidence = r.confidence;
   }

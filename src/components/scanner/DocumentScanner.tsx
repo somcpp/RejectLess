@@ -42,6 +42,8 @@ export function DocumentScanner({ title, onCapture, onClose }: { title: string; 
         return;
       }
       const attempts: MediaStreamConstraints[] = [
+        // Ask for the sharpest stream the camera offers; OCR needs resolution more than frame rate.
+        { video: { facingMode: { ideal: "environment" }, width: { ideal: 3840 }, height: { ideal: 2160 }, frameRate: { ideal: 15 } }, audio: false },
         { video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false },
         { video: { facingMode: "environment" }, audio: false },
         { video: true, audio: false },
@@ -136,7 +138,7 @@ export function DocumentScanner({ title, onCapture, onClose }: { title: string; 
     setFlash(true);
     setTimeout(() => setFlash(false), 180);
     try {
-      const page = capturePage(video.current, quad, enhance);
+      const page = await capturePage(video.current, quad, enhance);
       setPages((p) => [...p, page].slice(0, MAX_PAGES));
     } finally {
       setBusy(false);

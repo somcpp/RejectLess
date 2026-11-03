@@ -62,6 +62,10 @@ _Last updated: 2026-11-03. Update this file when you finish or start something; 
 
 - **Scanner on phones + mobile Ask (2026-11-03)**: the live camera needs a secure context — over plain `http://<LAN-IP>:3000` `navigator.mediaDevices` is undefined even with permission. The scanner now explains that, tries three constraint sets (rear camera → any camera), reports NotAllowed/NotFound/NotReadable by name, and offers "Take a photo" (`<input capture="environment">`, which opens the phone camera app even over http). `npm run dev:https` (`next dev --experimental-https`) serves a local HTTPS URL for phone testing of the live scanner. The floating Ask button is now visible on phones (above the sticky action bar).
 
+- **Scan result view (2026-11-03)**: scanning from the Ask panel now opens a result view (`assistant/ScanResult.tsx`): detected document type, extracted details, copyable recognised text, "Download scan" (JPG/PDF), "Add to my documents" / "Scan again". The scanner inside the panel is wrapped so clicks no longer bubble to the backdrop (which was closing the panel on every button). The Documents step shows a "Download the scan" link after a camera scan.
+
+- **Better OCR on photos and scans (2026-11-03)**: every photo/scanned page is now pre-processed for Tesseract (`prepareForOcr` in `lib/ingest/raster.ts`: upscale towards ~2000 px, grayscale, 2–98 percentile contrast stretch, light unsharp mask; quality metrics and previews still use the original). OCR is two-pass: sparse-text (PSM 11) first, block mode (PSM 6) when the first pass yields little, richer result wins. Scanner captures a true still via `ImageCapture.takePhoto()` where available (fallback: video frame), asks for a 4K stream, outputs up to 2400 px and upscales small quads; "document mode" enhancement is gentler (gamma 1.25) so faint ink survives. Measured on the harness: blurred passbook IFSC now read correctly (was "DOBK…"), dark passbook IFSC 52% → 87% and bank name no longer junk, Aadhaar photo average 86% → 90%.
+
 ## Known gaps
 
 - [ ] Scanner tested on synthetic frames only; try on real phones (lighting, autofocus delays, rear-camera selection).

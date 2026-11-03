@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { SchemeFinder } from "@/components/assistant/SchemeFinder";
 import { RejectionDecoder } from "@/components/assistant/RejectionDecoder";
 import { DocumentScanner } from "@/components/scanner/DocumentScanner";
+import { ScanResult } from "@/components/assistant/ScanResult";
 import { addFiles } from "@/lib/actions";
 import { goalForVariant } from "@/knowledge/onboarding";
 import { redact } from "@/lib/assistant/assistant";
@@ -49,7 +50,8 @@ export function AssistantPanel() {
   const [busy, setBusy] = useState(false);
   const [ai, setAi] = useState<{ enabled: boolean; model?: string }>({ enabled: false });
   const [askConsent, setAskConsent] = useState(false);
-  const [tool, setTool] = useState<"finder" | "decoder" | "scanner">();
+  const [tool, setTool] = useState<"finder" | "decoder" | "scanner" | "scan-result">();
+  const [scanned, setScanned] = useState<File[]>();
   const listRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const startSession = useSession((s) => s.startSession);
@@ -162,7 +164,19 @@ export function AssistantPanel() {
           {tool && tool !== "scanner" ? (
             <div>
               <button onClick={() => setTool(undefined)} className="mb-3 inline-flex items-center gap-1 text-[13px] font-semibold text-accent"><ArrowLeft className="size-4" /> Back to questions</button>
-              <p className="mb-3 text-[16px] font-bold text-accent">{tool === "finder" ? "Which schemes could I apply for?" : "Decode a rejection notice"}</p>
+              <p className="mb-3 text-[16px] font-bold text-accent">{tool === "finder" ? "Which schemes could I apply for?" : tool === "decoder" ? "Decode a rejection notice" : "Your scan"}</p>
+              {tool === "scan-result" && scanned && (
+                <ScanResult
+                  files={scanned}
+                  onRescan={() => setTool("scanner")}
+                  onAdd={() => {
+                    addFiles(scanned);
+                    setScanned(undefined);
+                    setTool(undefined);
+                    setMsgs((m) => [...m, { role: "assistant", text: "Added the scan to your documents. It is being read on your device — go to the Documents step, then run the check again.", answer: { text: "", citations: [], mode: "local", grounded: true } }]);
+                  }}
+                />
+              )}
               {tool === "finder" && (
                 <SchemeFinder
                   onPick={(appId, variantId) => {
@@ -239,15 +253,16 @@ export function AssistantPanel() {
         </form>
       </aside>
       {tool === "scanner" && (
-        <DocumentScanner
-          title="Scan a document"
-          onClose={() => setTool(undefined)}
-          onCapture={(files) => {
-            setTool(undefined);
-            addFiles(files);
-            setMsgs((m) => [...m, { role: "assistant", text: `Added ${files.length === 1 ? files[0].name : files.length + " pages"} to your documents. It is being read on your device — check the Documents step, then run the check again.`, answer: { text: "", citations: [], mode: "local", grounded: true } }]);
-          }}
-        />
+        <div onClick={(e) => e.stopPropagation()}>
+          <DocumentScanner
+            title="Scan a document"
+            onClose={() => setTool(undefined)}
+            onCapture={(files) => {
+              setScanned(files);
+              setTool("scan-result");
+            }}
+          />
+        </div>
       )}
     </div>
   );

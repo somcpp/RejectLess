@@ -172,7 +172,7 @@ export function warpRgba(src: Uint8ClampedArray, srcW: number, srcH: number, qua
  * "Document" enhancement: divides each pixel by the local background (box-blurred luminance),
  * which evens out lighting and lifts ink contrast. Works on RGBA in place.
  */
-export function enhanceDocument(rgba: Uint8ClampedArray, w: number, h: number, radius = Math.max(8, Math.round(Math.max(w, h) / 40))): void {
+export function enhanceDocument(rgba: Uint8ClampedArray, w: number, h: number, radius = Math.max(8, Math.round(Math.max(w, h) / 40)), gamma = 1.25): void {
   const lum = new Float32Array(w * h);
   for (let i = 0; i < w * h; i++) lum[i] = 0.299 * rgba[i * 4] + 0.587 * rgba[i * 4 + 1] + 0.114 * rgba[i * 4 + 2];
   // Summed-area table for an O(1) box blur.
@@ -190,9 +190,10 @@ export function enhanceDocument(rgba: Uint8ClampedArray, w: number, h: number, r
       const x0 = Math.max(0, x - radius), x1 = Math.min(w, x + radius + 1);
       const bg = (sat[y1 * (w + 1) + x1] - sat[y0 * (w + 1) + x1] - sat[y1 * (w + 1) + x0] + sat[y0 * (w + 1) + x0]) / ((y1 - y0) * (x1 - x0));
       const i = y * w + x;
-      // Paper → white, ink stays dark; mild gamma keeps light pencil readable.
-      const ratio = Math.min(1, lum[i] / Math.max(1, bg * 0.96));
-      const v = Math.round(255 * Math.pow(ratio, 1.6));
+      // Paper → white, ink stays dark; a mild gamma keeps thin strokes and light ink readable
+      // (a strong one erased faint text and hurt OCR).
+      const ratio = Math.min(1, lum[i] / Math.max(1, bg * 0.985));
+      const v = Math.round(255 * Math.pow(ratio, gamma));
       rgba[i * 4] = rgba[i * 4 + 1] = rgba[i * 4 + 2] = v;
     }
   }

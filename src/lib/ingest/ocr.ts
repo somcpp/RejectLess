@@ -32,8 +32,8 @@ async function getWorker(): Promise<TWorker> {
   return workerPromise;
 }
 
-export async function ocrCanvas(canvas: HTMLCanvasElement, page: number): Promise<{ lines: TextLine[]; confidence: number }> {
-  const worker = await getWorker();
+async function recognise(worker: TWorker, canvas: HTMLCanvasElement, page: number, psm: "11" | "6"): Promise<{ lines: TextLine[]; confidence: number }> {
+  await worker.setParameters({ tessedit_pageseg_mode: psm as never });
   const { data } = await worker.recognize(canvas, {}, { blocks: true, text: true });
   const W = canvas.width;
   const H = canvas.height;
@@ -56,6 +56,26 @@ export async function ocrCanvas(canvas: HTMLCanvasElement, page: number): Promis
   const weight = lines.reduce((s, l) => s + l.text.length, 0);
   const confidence = weight ? lines.reduce((s, l) => s + l.confidence * l.text.length, 0) / weight : 0;
   return { lines, confidence };
+}
+
+/** Readable characters recognised with decent confidence — the yardstick for choosing between passes. */
+function yieldOf(r: { lines: TextLine[] }): number {
+  return r.lines.reduce((s, l) => s + (l.confidence >= 0.5 ? l.text.replace(/\s/g, "").length : 0), 0);
+}
+
+/**
+ * Two-pass OCR. Sparse-text mode (PSM 11) is best for ID cards and forms with scattered
+ * fields; block mode (PSM 6) is best for dense pages such as certificates and letters. The
+ * second pass runs only when the first yields little, and the richer result wins.
+ */
+export async function ocrCanvas(canvas: HTMLCanvasElement, page: number): Promise<{ lines: TextLine[]; confidence: number }> {
+  const worker = await getWorker();
+  const sparse = await recognise(worker, canvas, page, "11");
+  const ySparse = yieldOf(sparse);
+  // Enough confident text in sparse mode → done (keeps the single-pass speed for cards).
+  if (ySparse >= 160 && sparse.confidence >= 0.72) return sparse;
+  const block = await recognise(worker, canvas, page, "6");
+  return yieldOf(block) > ySparse * 1.15 ? block : sparse;
 }
 
 /** Frees the OCR engine's memory (called on session deletion). */
